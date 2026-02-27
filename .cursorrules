@@ -1,0 +1,27 @@
+## Project language: English
+
+- **Code**: Variable names, function names, types, file names — all in English.
+- **Comments**: Write every comment in English (intent, decisions, edge cases).
+- **Docs/README**: Use English for documentation and in-code docs.
+- **Commits**: Prefer English for commit messages.
+
+## Workflow
+
+- Work **iteratively**: small, verifiable steps; run tests/linters when relevant.
+- Prefer **local, safe** refactors over large, risky changes.
+- When adding new patterns or conventions, **update this .cursorrules** so the project stays consistent.
+
+## Design principles
+
+- **Single responsibility**: One module/class/function = one reason to change. Split when it does more than one clear job.
+- **DRY**: Don't repeat yourself. Extract shared logic into a single place; duplicate only when requirements genuinely differ.
+- **KISS**: Prefer the simplest solution that works. Avoid unnecessary abstraction and indirection.
+- **Separation of concerns**: Keep UI, business logic, and data access in distinct layers; don't mix them in the same file/function.
+- **Depend on abstractions**: Prefer interfaces/contracts over concrete types where it reduces coupling and eases testing.
+- **Compose over inherit**: Favor composition and small, focused units over deep inheritance hierarchies.
+- **Explicit over implicit**: Make data flow and dependencies obvious (parameters, return types, clear names) rather than hidden globals or magic.
+
+## Code style
+
+- Prefer clear code over long comments; comments explain **why** and **trade-offs**, not line-by-line **what**.
+- On ambiguity, choose the safer, standard option and note assumptions briefly.
