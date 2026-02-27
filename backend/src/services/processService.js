@@ -4,22 +4,31 @@ import { buildMarkdownContent, writeMarkdown } from "./markdownService.js";
 const KINDS = ["link", "note", "file", "audio"];
 
 /**
- * Resuelve una entidad por kind e id y la normaliza al formato esperado por markdownService.
- * @param {string} kind - 'link' | 'note' | 'file' | 'audio'
- * @param {string} id - id del registro
- * @returns {Promise<{ title, type, content?, url?, createdAt } | null>} Objeto normalizado o null si no existe
+ * Resuelve una entidad por kind e id y la normaliza para markdownService,
+ * incluyendo el aiEnrichment ya almacenado en BD.
  */
 export async function getEntityByKindId(kind, id) {
   if (!KINDS.includes(kind) || !id) return null;
+
+  const parseAI = (raw) => {
+    try {
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  };
 
   switch (kind) {
     case "link": {
       const link = await prisma.link.findUnique({ where: { id } });
       if (!link) return null;
       return {
+        kind: "link",
         title: link.title ?? link.url,
         type: link.type,
         url: link.url,
+        metadata: link.metadata ? JSON.parse(link.metadata) : null,
+        aiEnrichment: parseAI(link.aiEnrichment),
         createdAt: link.createdAt,
       };
     }
@@ -27,9 +36,11 @@ export async function getEntityByKindId(kind, id) {
       const note = await prisma.note.findUnique({ where: { id } });
       if (!note) return null;
       return {
-        title: note.content?.slice(0, 50) ?? "Nota",
+        kind: "note",
+        title: note.content?.slice(0, 60) ?? "Nota",
         type: note.type,
         content: note.content,
+        aiEnrichment: parseAI(note.aiEnrichment),
         createdAt: note.createdAt,
       };
     }
@@ -37,22 +48,27 @@ export async function getEntityByKindId(kind, id) {
       const file = await prisma.file.findUnique({ where: { id } });
       if (!file) return null;
       return {
+        kind: "file",
         title: file.filename ?? "Archivo",
         type: file.type,
-        content: `Archivo: ${file.filePath}`,
+        filename: file.filename,
+        filePath: file.filePath,
+        size: file.size,
+        aiEnrichment: parseAI(file.aiEnrichment),
         createdAt: file.createdAt,
       };
     }
     case "audio": {
       const audio = await prisma.audio.findUnique({ where: { id } });
       if (!audio) return null;
-      const content = audio.transcription?.trim()
-        ? audio.transcription
-        : `Audio: ${audio.filePath}`;
+      const ai = parseAI(audio.aiEnrichment);
       return {
-        title: `Audio (${audio.type})`,
+        kind: "audio",
+        title: ai?.title ?? `Audio (${audio.type})`,
         type: audio.type,
-        content,
+        filePath: audio.filePath,
+        content: audio.transcription?.trim() ? audio.transcription : null,
+        aiEnrichment: ai,
         createdAt: audio.createdAt,
       };
     }
@@ -63,9 +79,6 @@ export async function getEntityByKindId(kind, id) {
 
 /**
  * Genera un nombre de fichero único para el Markdown (slug + id corto).
- * @param {string} title
- * @param {string} id
- * @returns {string} filename sin extensión, seguro para fs
  */
 function slugifyFilename(title, id) {
   const slug =
@@ -79,10 +92,7 @@ function slugifyFilename(title, id) {
 }
 
 /**
- * Procesa un ítem: resuelve entidad, genera MD, escribe en knowledge y actualiza Prisma.
- * @param {{ kind: string, id: string }} item
- * @param {string} destination
- * @returns {{ kind: string, id: string, processedPath?: string, error?: string }}
+ * Procesa un ítem: resuelve entidad, genera MD enriquecido, escribe en knowledge y actualiza Prisma.
  */
 export async function processItem(item, destination) {
   const { kind, id } = item;
@@ -91,8 +101,9 @@ export async function processItem(item, destination) {
     return { kind, id, error: "Entidad no encontrada o no procesable" };
   }
 
+  const resolvedTitle = entity.aiEnrichment?.title ?? entity.title;
   const content = buildMarkdownContent(entity);
-  const filename = slugifyFilename(entity.title, id);
+  const filename = slugifyFilename(resolvedTitle, id);
   const processedPath = writeMarkdown(destination, filename, content);
 
   const updatePayload = { inboxStatus: "processed", processedPath };

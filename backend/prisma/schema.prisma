@@ -13,38 +13,42 @@ model Link {
   type           String   // youtube, twitch, telegram, article, generic
   title          String?
   metadata       String?  // JSON: preview, channel, etc.
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
   createdAt      DateTime @default(now())
-  inboxStatus    String   @default("pending") // pending | processed
+  inboxStatus    String   @default("pending") // pending | processing | processed | error
   processedPath  String?
 }
 
 model File {
   id             String   @id @default(cuid())
   filePath       String
-  type          String   // pdf, word, image, ...
-  filename      String
-  size          Int?
-  createdAt     DateTime @default(now())
-  inboxStatus   String   @default("pending")
-  processedPath String?
+  type           String   // pdf, word, image, ...
+  filename       String
+  size           Int?
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints, extractedText)
+  createdAt      DateTime @default(now())
+  inboxStatus    String   @default("pending")
+  processedPath  String?
 }
 
 model Audio {
   id             String   @id @default(cuid())
   filePath       String
-  type          String   // voice_note, podcast, ...
-  duration      Int?     // segundos
-  transcription String?
-  createdAt     DateTime @default(now())
-  inboxStatus   String   @default("pending")
+  type           String   // voice_note, podcast, ...
+  duration       Int?     // segundos
+  transcription  String?
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
+  createdAt      DateTime @default(now())
+  inboxStatus    String   @default("pending")
   processedPath  String?
 }
 
 model Note {
   id             String   @id @default(cuid())
   content        String
-  type          String   // note, code, task, idea
-  createdAt     DateTime @default(now())
-  inboxStatus   String   @default("pending")
-  processedPath String?
+  type           String   // note, code, task, idea
+  aiEnrichment   String?  // JSON: AI-generated metadata (title, summary, tags, topics, keyPoints)
+  createdAt      DateTime @default(now())
+  inboxStatus    String   @default("pending")
+  processedPath  String?
 }
