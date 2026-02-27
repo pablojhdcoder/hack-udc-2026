@@ -4,13 +4,13 @@ import VoiceNoteCard from "./cards/VoiceNoteCard";
 import FileCard from "./cards/FileCard";
 
 const CARD_MAP = {
-  text: TextNoteCard,
+  note: TextNoteCard,
   link: LinkCard,
-  voice: VoiceNoteCard,
+  audio: VoiceNoteCard,
   file: FileCard,
 };
 
 export default function InboxCard({ item }) {
-  const Card = CARD_MAP[item.type] ?? TextNoteCard;
+  const Card = CARD_MAP[item.kind] ?? TextNoteCard;
   return <Card item={item} />;
 }

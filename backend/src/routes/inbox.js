@@ -256,17 +256,42 @@ router.get("/", async (req, res) => {
       ...withKind(audios, "audio"),
       ...withKind(notes, "note"),
     ]
-      .map((item) => ({
-        kind: item.kind,
-        id: item.id,
-        type: item.type,
-        createdAt: item.createdAt,
-        aiEnrichment: parseAI(item.aiEnrichment),
-        ...(item.kind === "link" && { url: item.url, title: item.title }),
-        ...(item.kind === "note" && { content: item.content }),
-        ...(item.kind === "file" && { filename: item.filename, filePath: item.filePath }),
-        ...(item.kind === "audio" && { filePath: item.filePath }),
-      }))
+      .map((item) => {
+        const base = {
+          kind: item.kind,
+          id: item.id,
+          type: item.type,
+          createdAt: item.createdAt,
+          aiEnrichment: parseAI(item.aiEnrichment),
+        };
+        if (item.kind === "link") {
+          let metadata = null;
+          try {
+            metadata = item.metadata ? JSON.parse(item.metadata) : null;
+          } catch {}
+          return {
+            ...base,
+            url: item.url,
+            title: item.title,
+            image: metadata?.image ?? null,
+          };
+        }
+        if (item.kind === "note") return { ...base, content: item.content };
+        if (item.kind === "file")
+          return {
+            ...base,
+            filename: item.filename,
+            filePath: item.filePath,
+            fileType: item.type,
+          };
+        if (item.kind === "audio")
+          return {
+            ...base,
+            filePath: item.filePath,
+            durationSeconds: item.duration ?? 0,
+          };
+        return base;
+      })
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     res.json(unified);

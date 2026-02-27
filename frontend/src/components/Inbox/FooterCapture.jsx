@@ -4,10 +4,11 @@ import { Mic, Send, Paperclip, Camera, FileUp } from "lucide-react";
 export default function FooterCapture({
   onProcessClick,
   pendingCount = 0,
-  onFileAdd,
-  onImageCapture,
+  onAdd,
 }) {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [sending, setSending] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
@@ -25,34 +26,54 @@ export default function FooterCapture({
     cameraInputRef.current?.click();
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !onFileAdd) return;
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-    const isImage = /^(jpg|jpeg|png|gif|webp|heic)$/.test(ext);
-    onFileAdd({
-      id: crypto.randomUUID?.() ?? `f-${Date.now()}`,
-      type: "file",
-      filename: file.name,
-      fileType: isImage ? "image" : ext || "file",
-      createdAt: new Date().toISOString(),
-      previewUrl: isImage ? URL.createObjectURL(file) : null,
-    });
-    e.target.value = "";
+  const handleSend = async () => {
+    const raw = inputValue.trim();
+    if (!raw || !onAdd || sending) return;
+    setSending(true);
+    try {
+      const isUrl = /^https?:\/\//i.test(raw);
+      await onAdd(isUrl ? { url: raw } : { content: raw });
+      setInputValue("");
+    } catch {
+      // error ya mostrado en App
+    } finally {
+      setSending(false);
+    }
   };
 
-  const handleCameraCapture = (e) => {
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
-    if (!file || !onImageCapture) return;
-    onImageCapture({
-      id: crypto.randomUUID?.() ?? `img-${Date.now()}`,
-      type: "file",
-      filename: file.name,
-      fileType: "image",
-      createdAt: new Date().toISOString(),
-      previewUrl: URL.createObjectURL(file),
-    });
-    e.target.value = "";
+    if (!file || !onAdd) return;
+    setSending(true);
+    try {
+      await onAdd({ file });
+    } catch {
+      // error en App
+    } finally {
+      setSending(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleCameraCapture = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !onAdd) return;
+    setSending(true);
+    try {
+      await onAdd({ file });
+    } catch {
+      // error en App
+    } finally {
+      setSending(false);
+      e.target.value = "";
+    }
   };
 
   return (
@@ -75,7 +96,6 @@ export default function FooterCapture({
         aria-hidden
       />
 
-      {/* Botón flotante Procesar: glassmorphism + sombra */}
       {pendingCount > 0 && (
         <div className="flex justify-center px-4 pt-3 pb-2">
           <div className="w-full max-w-sm rounded-2xl bg-zinc-900/80 backdrop-blur-md border border-zinc-700/50 shadow-2xl shadow-brand-500/20 p-1">
@@ -90,7 +110,6 @@ export default function FooterCapture({
         </div>
       )}
 
-      {/* Barra de input estilo mensajería: [clip + mic] [input] [enviar] */}
       <div className="relative flex items-center gap-2 px-3 pb-3 pt-2">
         <div className="relative flex items-center gap-0.5">
           <button
@@ -143,14 +162,19 @@ export default function FooterCapture({
             type="text"
             placeholder="Escribe o pega un enlace..."
             className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-500 text-[15px] outline-none min-w-0"
-            readOnly
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={sending}
             aria-label="Entrada de texto"
           />
         </div>
 
         <button
           type="button"
-          className="flex-shrink-0 w-11 h-11 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors"
+          onClick={handleSend}
+          disabled={sending || !inputValue.trim()}
+          className="flex-shrink-0 w-11 h-11 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:pointer-events-none"
           aria-label="Enviar"
         >
           <Send className="w-5 h-5" />
