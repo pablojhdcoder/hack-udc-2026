@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, Loader2, Check, FolderOpen } from "lucide-react";
-import { getInbox, processItems } from "../api/client";
+import { getInbox, processItems } from "../../api/client";
 
 export default function ProcessScreen({ onBack, onProcessDone }) {
   const [items, setItems] = useState([]);
