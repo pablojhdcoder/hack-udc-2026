@@ -27,14 +27,18 @@ const FILE_STYLES = {
 export default function FileCard({ item }) {
   const Icon = FILE_ICONS[item.fileType] ?? FILE_ICONS.default;
   const style = FILE_STYLES[item.fileType] ?? FILE_STYLES.default;
-  const isImage = item.fileType === "image" && item.previewUrl;
+  const previewUrl =
+    item.fileType === "image" && item.filePath
+      ? `/api/uploads/${item.filePath}`
+      : item.previewUrl;
+  const isImage = item.fileType === "image" && previewUrl;
 
   return (
     <article className="rounded-xl bg-zinc-800/80 border border-zinc-700/50 overflow-hidden">
       {isImage && (
         <div className="aspect-video bg-zinc-800 flex items-center justify-center">
           <img
-            src={item.previewUrl}
+            src={previewUrl}
             alt=""
             className="w-full h-full object-cover"
           />

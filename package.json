@@ -1,0 +1,14 @@
+{
+  "name": "hack-udc-2026",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "start": "concurrently -n backend,frontend -c blue,green \"npm run start:backend\" \"npm run dev:frontend\"",
+    "start:backend": "cd backend && npm start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -35,7 +35,7 @@ function getMockInbox() {
 }
 
 function addMockToInbox(payload) {
-  const rawInput = payload.rawInput ?? payload.content ?? "";
+  const rawInput = payload.rawInput ?? payload.content ?? payload.url ?? "";
   const isUrl = /^https?:\/\//i.test(rawInput.trim());
   const id = `mock-${++mockIdCounter}`;
   const item = isUrl
@@ -60,34 +60,60 @@ function addMockToInbox(payload) {
 
 function processMockItems(ids, destination) {
   const idsSet = new Set(ids.map((i) => i.id));
-  const before = mockItems.length;
   for (let i = mockItems.length - 1; i >= 0; i--) {
     if (idsSet.has(mockItems[i].id)) mockItems.splice(i, 1);
   }
-  const processed = before - mockItems.length;
   const paths = ids.map((_, idx) => `${destination}/nota-${idx + 1}.md`);
-  return Promise.resolve({ processed, paths });
+  return Promise.resolve({ results: paths.map((p) => ({ processedPath: p })) });
 }
 
 // ——— API real
+/** Normaliza respuesta: backend devuelve array; el frontend espera { items } */
 export async function getInbox() {
   if (USE_MOCK) return getMockInbox();
   const res = await fetch(`${API_BASE}/inbox`);
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const data = await res.json();
+  return Array.isArray(data) ? { items: data } : data;
 }
 
+/**
+ * Añade un ítem al inbox.
+ * @param {object} payload - { content?: string, url?: string } para texto/enlace, o { file: File } para subir archivo
+ */
 export async function addToInbox(payload) {
   if (USE_MOCK) return addMockToInbox(payload);
+
+  if (payload.file instanceof File) {
+    const form = new FormData();
+    form.append("file", payload.file);
+    const res = await fetch(`${API_BASE}/inbox`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  const body = {};
+  if (payload.url != null) body.url = payload.url;
+  if (payload.content != null) body.content = payload.content;
+  if (Object.keys(body).length === 0) throw new Error("Se requiere content, url o file");
+
   const res = await fetch(`${API_BASE}/inbox`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
+/**
+ * Procesa ítems seleccionados y genera Markdown en knowledge.
+ * @param {Array<{ kind: string, id: string }>} ids
+ * @param {string} destination - ruta relativa en knowledge (ej. "estudio/SI")
+ */
 export async function processItems(ids, destination) {
   if (USE_MOCK) return processMockItems(ids, destination);
   const res = await fetch(`${API_BASE}/process`, {
