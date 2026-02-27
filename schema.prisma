@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Link {
+  id             String   @id @default(cuid())
+  url            String
+  type           String   // youtube, twitch, telegram, article, generic
+  title          String?
+  metadata       String?  // JSON: preview, channel, etc.
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
+  createdAt      DateTime @default(now())
+  inboxStatus    String   @default("pending") // pending | processing | processed | error
+  processedPath  String?
+  topic          String?  // theme/category (e.g. "study", "work", "hobbies")
+}
+
+model File {
+  id             String   @id @default(cuid())
+  filePath       String
+  type          String   // pdf, word, image, ...
+  filename      String
+  size          Int?
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints, extractedText)
+  createdAt     DateTime @default(now())
+  inboxStatus   String   @default("pending")
+  processedPath String?
+  topic         String?
+}
+
+model Audio {
+  id             String   @id @default(cuid())
+  filePath       String
+  type          String   // voice_note, podcast, ...
+  duration      Int?     // segundos
+  transcription String?
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
+  createdAt      DateTime @default(now())
+  inboxStatus   String   @default("pending")
+  processedPath  String?
+  topic          String?
+}
+
+model Video {
+  id             String   @id @default(cuid())
+  filePath       String
+  type           String   // clip, tutorial, recording, screen_capture, ...
+  filename       String
+  size           Int?
+  duration       Int?     // seconds
+  createdAt      DateTime @default(now())
+  inboxStatus    String   @default("pending")
+  processedPath  String?
+  topic          String?
+}
+
+model Note {
+  id             String   @id @default(cuid())
+  content        String
+  type          String   // note, code, task, idea
+  aiEnrichment   String?  // JSON: AI-generated metadata (title, summary, tags, topics, keyPoints)
+  createdAt      DateTime @default(now())
+  inboxStatus   String   @default("pending")
+  processedPath String?
+  topic         String?
+}
