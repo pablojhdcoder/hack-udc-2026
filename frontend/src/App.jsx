@@ -259,12 +259,11 @@ export default function App() {
             if (loadingProcessData) return;
             setLoadingProcessData(true);
             try {
-              const { items: data } = await getInbox();
-              const list = Array.isArray(data) ? data : [];
-              setProcessInboxItems(list);
+              const { items: list } = await getInbox();
+              setProcessInboxItems(Array.isArray(list) ? list : []);
               setCurrentView("procesando");
-            } catch {
-              setLoadingProcessData(false);
+            } catch (err) {
+              console.error("Error al procesar:", err);
             } finally {
               setLoadingProcessData(false);
             }

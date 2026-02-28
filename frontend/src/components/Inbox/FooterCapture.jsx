@@ -311,14 +311,14 @@ export default function FooterCapture({
             <button
               type="button"
               onClick={onProcessClick}
-              disabled={processLoading}
-              className="w-full py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-sm transition-colors disabled:opacity-70 disabled:pointer-events-none flex items-center justify-center gap-2"
+              disabled={processLoading || pendingCount === 0}
+              className="w-full py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-sm transition-colors disabled:opacity-70 disabled:cursor-not-allowed disabled:pointer-events-none flex items-center justify-center gap-2 min-h-[44px]"
             >
               {processLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {t("common.preparing")}
-                </>
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin shrink-0" />
+                  <span>{t("processing.processingLabel")}</span>
+                </div>
               ) : (
                 t("home.processButton", { count: pendingCount })
               )}
