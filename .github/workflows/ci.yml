@@ -1,0 +1,38 @@
+# CI básico: verificar que el proyecto instala y construye correctamente.
+# Recomendado: añadir lint y tests cuando estén configurados (ver CONTRIBUTING.md).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install backend dependencies
+        run: cd backend && npm ci
+
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+
+      - name: Prisma generate
+        run: cd backend && npx prisma generate
+        env:
+          DATABASE_URL: "file:./dev.db"
+
+      - name: Build frontend
+        run: cd frontend && npm run build
