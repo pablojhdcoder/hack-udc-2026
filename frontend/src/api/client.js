@@ -159,6 +159,30 @@ export async function getProcessedRecent(limit = 5) {
 }
 
 /**
+ * Ítems procesados aún no abiertos (carpeta Novedades).
+ * @param {number} limit
+ */
+export async function getNovelties(limit = 50) {
+  const res = await fetch(`${API_BASE}/inbox/novelties?limit=${limit}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
+ * Marca un ítem como "abierto" (para que deje de aparecer en Novedades).
+ * @param {string} kind - note | link | file | photo | audio | video
+ * @param {string} id
+ */
+export async function markOpened(kind, id) {
+  const res = await fetch(`${API_BASE}/inbox/opened`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, id }),
+  });
+  if (!res.ok && res.status !== 204) throw new Error(await res.text());
+}
+
+/**
  * Todos los ítems de un tipo (note, link, file, audio, video) — pending y processed.
  * Para kind "favorite" usar getFavorites().
  * @param {string} kind
@@ -166,6 +190,18 @@ export async function getProcessedRecent(limit = 5) {
  */
 export async function getInboxByKind(kind) {
   const res = await fetch(`${API_BASE}/inbox/by-kind/${kind}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
+ * Detalle de un ítem del inbox (p. ej. para ver el contenido completo de una nota).
+ * @param {string} kind - note | link | file | photo | audio | video
+ * @param {string} id
+ * @returns {Promise<{ content?, title?, url?, filePath?, ... }>}
+ */
+export async function getInboxItem(kind, id) {
+  const res = await fetch(`${API_BASE}/inbox/${kind}/${id}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }

@@ -13,6 +13,7 @@ export default function FooterCapture({
   const [recordingError, setRecordingError] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(null);
+  const [streamReady, setStreamReady] = useState(false);
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -41,11 +42,13 @@ export default function FooterCapture({
   const handleOpenCamera = useCallback(() => {
     setAttachMenuOpen(false);
     setCameraError(null);
+    setStreamReady(false);
     setRecordingError(null);
     setCameraOpen(true);
   }, []);
 
   const handleCloseCamera = useCallback(() => {
+    setStreamReady(false);
     const video = videoRef.current;
     if (video?.srcObject) {
       const stream = video.srcObject;
@@ -58,47 +61,87 @@ export default function FooterCapture({
   }, []);
 
   useEffect(() => {
-    if (!cameraOpen || !videoRef.current) return;
+    if (!cameraOpen) return;
     const video = videoRef.current;
+    if (!video) return;
+
+    setCameraError(null);
+    setStreamReady(false);
+
+    const onReady = () => setStreamReady(true);
+    const onError = () => setStreamReady(false);
+    video.addEventListener("loadeddata", onReady);
+    video.addEventListener("error", onError);
+
     const constraints = {
       video: {
         facingMode: "environment",
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        width: { ideal: 1280, max: 1920 },
+        height: { ideal: 720, max: 1080 },
       },
       audio: false,
     };
+
+    let cancelled = false;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Tu navegador no soporta la cámara. Usa HTTPS.");
+      return () => {
+        video.removeEventListener("loadeddata", onReady);
+        video.removeEventListener("error", onError);
+      };
+    }
     navigator.mediaDevices
       .getUserMedia(constraints)
       .catch(() => navigator.mediaDevices.getUserMedia({ video: true }))
-      .then((s) => {
-        cameraStreamRef.current = s;
-        video.srcObject = s;
-        video.play().catch(() => {});
+      .then((stream) => {
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        cameraStreamRef.current = stream;
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        video.play().then(() => {
+          if (!cancelled) setStreamReady(true);
+        }).catch(() => {
+          if (!cancelled) setStreamReady(true);
+        });
       })
       .catch((err) => {
-        setCameraError(err?.message ?? "No se pudo abrir la cámara");
+        if (!cancelled) {
+          setCameraError(err?.message ?? "No se pudo abrir la cámara. Comprueba los permisos o usa HTTPS.");
+        }
       });
+
     return () => {
+      cancelled = true;
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("error", onError);
       const stream = cameraStreamRef.current;
       if (stream) {
-        stream.getTracks?.().forEach((t) => t.stop());
+        stream.getTracks().forEach((t) => t.stop());
         cameraStreamRef.current = null;
       }
       if (video.srcObject) {
         video.srcObject = null;
       }
+      setStreamReady(false);
     };
   }, [cameraOpen]);
 
   const handleCapturePhoto = useCallback(() => {
     const video = videoRef.current;
-    if (!video || !video.videoWidth || !onAdd) return;
+    if (!video || !onAdd) return;
+    const w = video.videoWidth;
+    const h = video.videoHeight;
+    if (!w || !h) return;
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = w;
+    canvas.height = h;
     const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0);
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, w, h);
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
@@ -219,6 +262,7 @@ export default function FooterCapture({
             playsInline
             muted
             className="absolute inset-0 w-full h-full object-cover"
+            style={{ transform: "translateZ(0)" }}
           />
           {cameraError && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/90 p-4">
@@ -246,10 +290,14 @@ export default function FooterCapture({
             <button
               type="button"
               onClick={handleCapturePhoto}
-              disabled={!!cameraError}
-              className="w-16 h-16 rounded-full bg-white border-4 border-white/50 shadow-lg hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none"
+              disabled={!!cameraError || !streamReady}
+              className="w-16 h-16 rounded-full bg-white border-4 border-white/50 shadow-lg hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center"
               aria-label="Capturar foto"
-            />
+            >
+              {!streamReady && !cameraError && (
+                <span className="w-6 h-6 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
+              )}
+            </button>
           </div>
         </div>
       )}
