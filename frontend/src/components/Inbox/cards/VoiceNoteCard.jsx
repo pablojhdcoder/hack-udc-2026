@@ -18,7 +18,7 @@ function formatDuration(sec) {
 
 export default function VoiceNoteCard({ item }) {
   return (
-    <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-zinc-800/80 dark:border-zinc-700/50">
+    <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-neutral-800/80 dark:border-neutral-700/50">
       <div className="flex gap-3 items-center">
         <button
           type="button"
