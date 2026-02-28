@@ -510,7 +510,7 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
           <div className="w-10" />
         </div>
         {items.length > 0 && (
-          <div className="px-2 pb-2 overflow-x-auto overflow-y-hidden">
+          <div className="px-2 pb-2 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] overscroll-x-contain snap-x snap-mandatory w-full">
             <div className="flex gap-1.5 justify-start min-w-min py-1">
               {items.map((item, idx) => {
                 const Icon = ICON_BY_KIND[item.kind] ?? FileText;
