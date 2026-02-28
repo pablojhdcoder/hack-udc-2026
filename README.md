@@ -31,10 +31,7 @@ hack-udc-2026/
 ### Opción 1: Todo desde la raíz (recomendado)
 
 ```bash
-# En la raíz del repo
-npm install
-cd backend && cp .env.example .env && npx prisma db push && cd ..
-npm run dev
+npm run setup && npm run dev
 ```
 
 Se levantan backend (`http://localhost:3001`) y frontend (`http://localhost:5173`) a la vez. El frontend hace proxy de `/api` al backend.
