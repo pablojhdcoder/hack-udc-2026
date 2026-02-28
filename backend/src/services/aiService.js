@@ -166,6 +166,63 @@ async function azureGenerateContent(messages, maxTokens = 1024) {
 }
 
 // ──────────────────────────────────────────────
+// Reintentos para errores 429 de Gemini
+// ──────────────────────────────────────────────
+
+const GEMINI_MAX_RETRIES = 3;
+
+/**
+ * Extrae el delay sugerido del cuerpo del error 429 de Gemini.
+ * Formato: "Please retry in 38.723195058s."
+ * Devuelve ms con un margen de +2 s, o null si no se puede parsear.
+ */
+function parseGeminiRetryDelayMs(err) {
+  const msg = err?.message ?? "";
+  const match = /Please retry in ([0-9.]+)s/i.exec(msg);
+  if (match) {
+    const seconds = parseFloat(match[1]);
+    if (!isNaN(seconds)) return Math.ceil(seconds * 1000) + 2_000;
+  }
+  return null;
+}
+
+function isGeminiRateLimitError(err) {
+  const msg = err?.message ?? "";
+  return (
+    err?.status === 429 ||
+    msg.includes("429") ||
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.toLowerCase().includes("quota") ||
+    msg.includes("Too Many Requests")
+  );
+}
+
+/**
+ * Envuelve una llamada a la API de Gemini con reintentos automáticos en caso de 429.
+ * Usa el retryDelay que indica la propia API; si no está presente aplica backoff exponencial.
+ */
+async function withGeminiRetry(fn, label = "Gemini") {
+  let lastErr;
+  for (let attempt = 1; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isGeminiRateLimitError(err)) throw err; // error no retriable
+
+      const apiDelay = parseGeminiRetryDelayMs(err);
+      const delay = apiDelay ?? Math.min(15_000 * attempt, 90_000); // backoff exponencial
+      console.warn(
+        `[AI] ${label}: límite de tasa (429), intento ${attempt}/${GEMINI_MAX_RETRIES}. ` +
+        `Esperando ${Math.round(delay / 1000)} s antes de reintentar...`
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
+// ──────────────────────────────────────────────
 // Gemini — generación de JSON (inline)
 // ──────────────────────────────────────────────
 
@@ -173,25 +230,27 @@ async function geminiGenerateContent(parts, maxOutputTokens = 1024) {
   const model = getGeminiModel();
   if (!model) throw new Error("GEMINI_API_KEY no configurada");
 
-  const result = await model.generateContent({
-    contents: [{ role: "user", parts }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens,
-      responseMimeType: "application/json",
-    },
-  });
+  return withGeminiRetry(async () => {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts }],
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens,
+        responseMimeType: "application/json",
+      },
+    });
 
-  const response = result.response;
-  if (!response?.text) throw new Error("Respuesta vacía de Gemini");
+    const response = result.response;
+    if (!response?.text) throw new Error("Respuesta vacía de Gemini");
 
-  const raw = response.text();
-  const cleaned = stripJsonWrapper(raw);
-  try {
-    return JSON.parse(cleaned);
-  } catch (err) {
-    throw new Error(`JSON inválido en respuesta Gemini: ${err.message}. Raw: ${raw.slice(0, 200)}`);
-  }
+    const raw = response.text();
+    const cleaned = stripJsonWrapper(raw);
+    try {
+      return JSON.parse(cleaned);
+    } catch (err) {
+      throw new Error(`JSON inválido en respuesta Gemini: ${err.message}. Raw: ${raw.slice(0, 200)}`);
+    }
+  }, "Gemini inline");
 }
 
 // ──────────────────────────────────────────────
@@ -248,27 +307,30 @@ async function geminiFileAPIGenerateContent(absolutePath, filename, promptText, 
   console.log(`[AI] File API: '${filename}' procesado, generando análisis...`);
 
   try {
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [
-          { text: promptText },
-          { fileData: { mimeType: file.mimeType, fileUri: file.uri } },
-        ],
-      }],
-      generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens,
-        responseMimeType: "application/json",
-      },
-    });
+    // El fichero ya está subido: solo reintentamos generateContent en caso de 429
+    return await withGeminiRetry(async () => {
+      const result = await model.generateContent({
+        contents: [{
+          role: "user",
+          parts: [
+            { text: promptText },
+            { fileData: { mimeType: file.mimeType, fileUri: file.uri } },
+          ],
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens,
+          responseMimeType: "application/json",
+        },
+      });
 
-    const raw = result.response?.text?.() ?? "";
-    if (!raw) throw new Error("Respuesta vacía de Gemini File API");
-    const cleaned = stripJsonWrapper(raw);
-    return JSON.parse(cleaned);
+      const raw = result.response?.text?.() ?? "";
+      if (!raw) throw new Error("Respuesta vacía de Gemini File API");
+      const cleaned = stripJsonWrapper(raw);
+      return JSON.parse(cleaned);
+    }, `File API '${filename}'`);
   } finally {
-    // Limpiar el fichero remoto siempre, incluso si falla la generación
+    // Limpiar el fichero remoto siempre, incluso si todos los reintentos fallan
     await fileManager.deleteFile(file.name).catch((e) =>
       console.warn("[AI] No se pudo borrar fichero remoto:", e.message)
     );

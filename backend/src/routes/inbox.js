@@ -64,6 +64,10 @@ async function saveEnrichment(model, id, data, extraField = null) {
 
 async function saveCalendarEvents(events, sourceKind, sourceId) {
   if (!events || events.length === 0) return;
+  if (!prisma.calendarEvent) {
+    console.warn("[AI] Calendario no disponible (prisma.calendarEvent). Ejecuta: npx prisma generate && npx prisma db push");
+    return;
+  }
   for (const ev of events) {
     if (!ev.title || !ev.date) continue;
     try {
