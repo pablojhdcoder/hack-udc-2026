@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Sparkles, Trash2, CalendarDays } from "lucide-react";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -47,6 +47,19 @@ export default function CalendarioView({ onBack }) {
   const [selectedDate, setSelectedDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()));
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const fetchEvents = () => {
+    setIsLoading(true);
+    fetch("/api/eventos")
+      .then((res) => (res.ok ? res.json() : Promise.resolve([])))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.events ?? [];
+        setEvents(list);
+      })
+      .catch(() => setEvents([]))
+      .finally(() => setIsLoading(false));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -58,14 +71,22 @@ export default function CalendarioView({ onBack }) {
         const list = Array.isArray(data) ? data : data?.events ?? [];
         setEvents(list);
       })
-      .catch(() => {
-        if (!cancelled) setEvents([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
+      .catch(() => { if (!cancelled) setEvents([]); })
+      .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  const handleDeleteEvent = async (id) => {
+    setDeletingId(id);
+    try {
+      await fetch(`/api/eventos/${id}`, { method: "DELETE" });
+      setEvents((prev) => prev.filter((e) => e.id !== id));
+    } catch {
+      // silenciar error
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -199,29 +220,61 @@ export default function CalendarioView({ onBack }) {
 
             {/* Lista de eventos del día seleccionado */}
             <div className="border-t border-neutral-800 mt-6 pt-4">
-              <h2 className="text-sm font-medium text-neutral-400 mb-3">
-                Eventos del día
-              </h2>
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarDays className="w-4 h-4 text-blue-400" />
+                <h2 className="text-sm font-medium text-neutral-400">
+                  {selectedDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                </h2>
+              </div>
               {eventsOnSelectedDay.length === 0 ? (
-                <p className="text-neutral-500 text-sm">No hay eventos para este día.</p>
+                <p className="text-neutral-500 text-sm py-4">No hay eventos para este día.</p>
               ) : (
                 <ul className="space-y-3">
-                  {eventsOnSelectedDay.map((event, index) => (
+                  {eventsOnSelectedDay
+                    .sort((a, b) => {
+                      if (!a.time && !b.time) return 0;
+                      if (!a.time) return 1;
+                      if (!b.time) return -1;
+                      return a.time.localeCompare(b.time);
+                    })
+                    .map((event, index) => (
                     <li
                       key={event.id ?? index}
-                      className="rounded-xl bg-neutral-800/80 border border-neutral-700/50 p-4 flex flex-col gap-1"
+                      className="rounded-xl bg-neutral-800/80 border border-neutral-700/50 p-4 flex flex-col gap-1.5 group"
                     >
-                      <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">
-                        {event.time ?? event.hora ?? event.date ?? event.dateTime ?? event.fecha ?? "—"}
-                      </p>
-                      <p className="text-sm text-white font-medium">
-                        {event.title ?? event.titulo ?? "Sin título"}
-                      </p>
-                      {(event.note ?? event.originalNote ?? event.sourceContent ?? event.nota) && (
-                        <p className="text-xs text-neutral-500 line-clamp-2 mt-1">
-                          {event.note ?? event.originalNote ?? event.sourceContent ?? event.nota}
-                        </p>
-                      )}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          {(event.time) && (
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                              <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                              <span className="text-xs text-blue-400 font-medium tabular-nums">{event.time}</span>
+                            </div>
+                          )}
+                          <p className="text-sm text-white font-semibold leading-snug">
+                            {event.title ?? event.titulo ?? "Sin título"}
+                          </p>
+                          {(event.description ?? event.note ?? event.originalNote ?? event.sourceContent ?? event.nota) && (
+                            <p className="text-xs text-neutral-400 mt-1 leading-relaxed line-clamp-3">
+                              {event.description ?? event.note ?? event.originalNote ?? event.sourceContent ?? event.nota}
+                            </p>
+                          )}
+                          {event.sourceKind && (
+                            <div className="flex items-center gap-1 mt-2">
+                              <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span className="text-[10px] text-amber-400 font-medium uppercase tracking-wider">Detectado por IA · {event.sourceKind}</span>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEvent(event.id)}
+                          disabled={deletingId === event.id}
+                          className="p-1.5 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                          aria-label="Eliminar evento"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </li>
                   ))}
                 </ul>

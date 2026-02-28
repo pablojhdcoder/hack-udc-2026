@@ -616,3 +616,96 @@ export async function enrichAudio(filePath, type) {
     error: "No se pudo transcribir/analizar el audio (inline y File API fallaron)",
   });
 }
+
+// ──────────────────────────────────────────────
+// Detectar EVENTOS DE CALENDARIO en un texto
+//
+// Analiza si el contenido contiene fechas, citas, recordatorios, deadlines,
+// reuniones o cualquier evento que debería ir al calendario.
+// Devuelve un array de eventos (puede ser vacío si no hay nada relevante).
+// ──────────────────────────────────────────────
+
+const CALENDAR_SCHEMA = `[
+  {
+    "title": "título breve del evento (máx 50 caracteres)",
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM o null si no se especifica hora",
+    "description": "descripción/contexto en 1-2 frases"
+  }
+]`;
+
+const CURRENT_DATE_STR = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * Analiza el contenido de un ítem y extrae eventos de calendario detectados.
+ * @param {string} content - Texto a analizar (nota, título+URL, etc.)
+ * @returns {Promise<Array<{title, date, time, description}>>} Array vacío si no hay eventos.
+ */
+export async function detectCalendarEvents(content) {
+  const instruction = `Analiza el siguiente texto y detecta si contiene eventos de calendario: citas, reuniones, recordatorios, deadlines, cumpleaños, eventos, plazos u otras fechas importantes.
+
+Fecha actual: ${CURRENT_DATE_STR()}
+
+TEXTO:
+"""
+${content.slice(0, 3000)}
+"""
+
+Si el texto contiene uno o varios eventos de calendario, extráelos.
+Si NO contiene ningún evento con fecha concreta, devuelve un array vacío: [].
+
+IMPORTANTE:
+- Solo extrae eventos con una fecha identificable (explícita o claramente deducible del contexto).
+- Si hay una hora, inclúyela en formato HH:MM de 24h.
+- Si no hay hora, usa null.
+- Las fechas relativas ("mañana", "el lunes", "la próxima semana") deben convertirse a fecha absoluta YYYY-MM-DD usando la fecha actual como referencia.
+- No inventes fechas que no aparezcan en el texto.
+
+Responde ÚNICAMENTE con un array JSON válido:
+${CALENDAR_SCHEMA}`;
+
+  const azureFn = async () => {
+    const client = getAzureClient();
+    if (!client) throw new Error("Azure no disponible");
+    const completion = await client.chat.completions.create({
+      model: getAzureDeployment(),
+      messages: [
+        { role: "system", content: "Eres un asistente que extrae eventos de calendario de textos. Responde siempre con un array JSON válido." },
+        { role: "user", content: instruction },
+      ],
+      temperature: 0.1,
+      max_tokens: 1024,
+    });
+    const raw = stripJsonWrapper(completion.choices?.[0]?.message?.content ?? "[]");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  };
+
+  const geminiFn = async () => {
+    const model = getGeminiModel();
+    if (!model) throw new Error("Gemini no disponible");
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: instruction }] }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1024, responseMimeType: "application/json" },
+    });
+    const raw = stripJsonWrapper(result.response?.text?.() ?? "[]");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  };
+
+  try {
+    if (getAzureClient()) {
+      try {
+        return await withTimeout(azureFn(), AZURE_TIMEOUT_MS);
+      } catch (err) {
+        console.warn(`[AI] detectCalendarEvents Azure falló (${err.message}), usando Gemini...`);
+      }
+    }
+    if (getGeminiModel()) {
+      return await geminiFn();
+    }
+  } catch (err) {
+    console.warn("[AI] detectCalendarEvents falló:", err.message);
+  }
+  return [];
+}

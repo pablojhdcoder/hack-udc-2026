@@ -102,6 +102,18 @@ model Favorite {
   @@unique([kind, sourceId])
 }
 
+// Eventos de calendario detectados automáticamente por IA a partir del inbox.
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  title       String
+  date        String   // YYYY-MM-DD
+  time        String?  // HH:MM (opcional)
+  description String?  // descripción/contexto del evento
+  sourceKind  String?  // nota | link | file | ...
+  sourceId    String?  // id del ítem origen
+  createdAt   DateTime @default(now())
+}
+
 // Estado de apertura (para "Novedades": procesados aún no abiertos).
 model ViewState {
   id           String   @id @default(cuid())

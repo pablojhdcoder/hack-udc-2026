@@ -11,6 +11,7 @@ import {
   enrichFile,
   enrichAudio,
   enrichVideo,
+  detectCalendarEvents,
 } from "../services/aiService.js";
 import { parseFile as parseAudioMetadata } from "music-metadata";
 
@@ -36,10 +37,36 @@ async function saveEnrichment(model, id, data, extraField = null) {
   await model.update({ where: { id }, data: payload });
 }
 
+async function saveCalendarEvents(events, sourceKind, sourceId) {
+  if (!events || events.length === 0) return;
+  for (const ev of events) {
+    if (!ev.title || !ev.date) continue;
+    try {
+      await prisma.calendarEvent.create({
+        data: {
+          title: String(ev.title).slice(0, 200),
+          date: String(ev.date).slice(0, 10),
+          time: ev.time ? String(ev.time).slice(0, 10) : null,
+          description: ev.description ? String(ev.description).slice(0, 500) : null,
+          sourceKind,
+          sourceId,
+        },
+      });
+      console.log(`[AI] Evento de calendario creado: "${ev.title}" (${ev.date})`);
+    } catch (err) {
+      console.warn("[AI] No se pudo guardar evento de calendario:", err.message);
+    }
+  }
+}
+
 async function runNoteEnrichment(id, content) {
   try {
-    const enrichment = await enrichNote(content);
+    const [enrichment, events] = await Promise.all([
+      enrichNote(content),
+      detectCalendarEvents(content),
+    ]);
     await saveEnrichment(prisma.note, id, enrichment);
+    await saveCalendarEvents(events, "note", id);
   } catch (err) {
     console.error(`[AI] Error enriqueciendo nota ${id}:`, err.message);
     await saveEnrichment(prisma.note, id, { error: err.message, enrichedAt: new Date().toISOString() });
@@ -50,6 +77,10 @@ async function runLinkEnrichment(id, url, preview) {
   try {
     const enrichment = await enrichLink(url, preview);
     await saveEnrichment(prisma.link, id, enrichment);
+    // Detectar eventos en el título + descripción del enlace
+    const linkText = [url, preview?.title, preview?.description].filter(Boolean).join("\n");
+    const events = await detectCalendarEvents(linkText);
+    await saveCalendarEvents(events, "link", id);
   } catch (err) {
     console.error(`[AI] Error enriqueciendo link ${id}:`, err.message);
     await saveEnrichment(prisma.link, id, { error: err.message, enrichedAt: new Date().toISOString() });
