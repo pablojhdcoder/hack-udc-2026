@@ -96,7 +96,7 @@ router.post("/", optionalMulter, async (req, res) => {
   try {
     const aiActive = isAIEnabled();
     if (req.file && !aiActive) {
-      console.log("[AI] Desactivada: configura AZURE_OPENAI_ENDPOINT y AZURE_OPENAI_API_KEY en .env para enriquecimiento.");
+      console.log("[AI] Desactivada: configura GEMINI_API_KEY en .env para enriquecimiento.");
     }
 
     // ── Multipart: fichero subido ──
