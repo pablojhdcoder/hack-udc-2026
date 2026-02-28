@@ -1,10 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles } from "lucide-react";
 import {
   getVaultFolders,
   getProcessedRecent,
+  getNovelties,
+  markOpened,
   getInboxByKind,
   getFavorites,
+  getInboxItem,
   discardItem,
   checkFavorite,
   addToFavorites,
@@ -18,6 +21,7 @@ const ICON_BY_KIND = {
   photo: Image,
   audio: Mic,
   video: Video,
+  novelty: Sparkles,
   favorite: Star,
 };
 
@@ -28,6 +32,7 @@ const KIND_LABEL = {
   photo: "Fotos",
   audio: "Audio",
   video: "Video",
+  novelty: "Novedades",
   favorite: "Favoritos",
 };
 
@@ -43,7 +48,7 @@ function formatDate(iso) {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
-export default function VaultScreen({ onBack }) {
+export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [folders, setFolders] = useState([]);
   const [recent, setRecent] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +63,10 @@ export default function VaultScreen({ onBack }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
   const [folderViewActive, setFolderViewActive] = useState(false);
+  const [fullNoteContent, setFullNoteContent] = useState(null);
+  const [loadingNote, setLoadingNote] = useState(false);
+  const lastOpenedKeyRef = useRef(null);
+  const initialAppliedRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,13 +91,19 @@ export default function VaultScreen({ onBack }) {
     load();
   }, [load]);
 
+  const fetchFolderItems = useCallback(async (kind) => {
+    if (kind === "favorite") return getFavorites();
+    if (kind === "novelty") return getNovelties(100);
+    return getInboxByKind(kind);
+  }, []);
+
   const handleFolderClick = useCallback(async (kind) => {
     setSelectedKind(kind);
     setFolderViewActive(true);
     setLoadingKind(true);
     setError(null);
     try {
-      const list = kind === "favorite" ? await getFavorites() : await getInboxByKind(kind);
+      const list = await fetchFolderItems(kind);
       setItemsByKind(Array.isArray(list) ? list : []);
     } catch (err) {
       setError(err?.message ?? "Error al cargar");
@@ -96,7 +111,23 @@ export default function VaultScreen({ onBack }) {
     } finally {
       setLoadingKind(false);
     }
-  }, []);
+  }, [fetchFolderItems]);
+
+  useEffect(() => {
+    if (!initialFolder || loading) return;
+    if (!selectedKind && !loadingKind) {
+      handleFolderClick(initialFolder);
+    }
+  }, [initialFolder, loading, selectedKind, loadingKind, handleFolderClick]);
+
+  useEffect(() => {
+    if (!initialFolder || !initialItemId || initialAppliedRef.current) return;
+    if (selectedKind === initialFolder && itemsByKind.length > 0 && !loadingKind) {
+      const item = itemsByKind.find((i) => i.id === initialItemId);
+      if (item) setSelectedItem(item);
+      initialAppliedRef.current = true;
+    }
+  }, [initialFolder, initialItemId, selectedKind, itemsByKind, loadingKind]);
 
   const handleBackFromFolder = useCallback(() => {
     setFolderViewActive(false);
@@ -125,7 +156,7 @@ export default function VaultScreen({ onBack }) {
       setTimeout(() => setToastMessage(null), 2500);
       await load();
       if (selectedKind) {
-        const list = selectedKind === "favorite" ? await getFavorites() : await getInboxByKind(selectedKind);
+        const list = await fetchFolderItems(selectedKind);
         setItemsByKind(Array.isArray(list) ? list : []);
       }
     } catch (err) {
@@ -133,7 +164,7 @@ export default function VaultScreen({ onBack }) {
     } finally {
       setDeleting(false);
     }
-  }, [selectedItem, selectedKind, deleting, load, isFavoriteItem, isFavoriteFolder]);
+  }, [selectedItem, selectedKind, deleting, load, isFavoriteItem, isFavoriteFolder, fetchFolderItems]);
 
   const handleCancelDelete = useCallback(() => {
     setShowDeleteConfirm(false);
@@ -142,6 +173,10 @@ export default function VaultScreen({ onBack }) {
 
   useEffect(() => {
     if (selectedItem) setShowDeleteConfirm(false);
+  }, [selectedItem]);
+
+  useEffect(() => {
+    lastOpenedKeyRef.current = null;
   }, [selectedItem]);
 
   useEffect(() => {
@@ -155,6 +190,44 @@ export default function VaultScreen({ onBack }) {
     });
     return () => { cancelled = true; };
   }, [selectedItem]);
+
+  const isNoteItem = selectedItem?.kind === "note" || selectedItem?.sourceKind === "note";
+  useEffect(() => {
+    const isNote = selectedItem && (selectedItem.kind === "note" || (selectedItem.kind === "favorite" && selectedItem.sourceKind === "note"));
+    if (!isNote) {
+      setFullNoteContent(null);
+      setLoadingNote(false);
+      return;
+    }
+    const kind = selectedItem.kind === "favorite" ? selectedItem.sourceKind : selectedItem.kind;
+    const id = selectedItem.kind === "favorite" ? selectedItem.sourceId : selectedItem.id;
+    setLoadingNote(true);
+    setFullNoteContent(null);
+    let cancelled = false;
+    getInboxItem(kind, id)
+      .then((data) => {
+        if (!cancelled) setFullNoteContent(data.content ?? "");
+        const key = `${kind}:${id}`;
+        if (!cancelled && lastOpenedKeyRef.current !== key) {
+          lastOpenedKeyRef.current = key;
+          markOpened(kind, id)
+            .then(async () => {
+              await load();
+              if (selectedKind === "novelty") {
+                setItemsByKind((prev) => prev.filter((it) => !(it.kind === kind && it.id === id)));
+              }
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setFullNoteContent(selectedItem.content ?? "");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingNote(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedItem, selectedKind, load]);
 
   const handleToggleFavorite = useCallback(async () => {
     if (!selectedItem || selectedItem.kind === "favorite" || togglingFavorite) return;
@@ -209,6 +282,22 @@ export default function VaultScreen({ onBack }) {
 
   const openItemUrl = useCallback(() => {
     if (!selectedItem) return;
+    const kind = selectedItem.kind === "favorite" ? selectedItem.sourceKind : selectedItem.kind;
+    const id = selectedItem.kind === "favorite" ? selectedItem.sourceId : selectedItem.id;
+    if (kind && id && kind !== "favorite") {
+      const key = `${kind}:${id}`;
+      if (lastOpenedKeyRef.current !== key) {
+        lastOpenedKeyRef.current = key;
+        markOpened(kind, id)
+          .then(async () => {
+            await load();
+            if (selectedKind === "novelty") {
+              setItemsByKind((prev) => prev.filter((it) => !(it.kind === kind && it.id === id)));
+            }
+          })
+          .catch(() => {});
+      }
+    }
     if (selectedItem.url) {
       window.open(selectedItem.url, "_blank", "noopener,noreferrer");
       return;
@@ -217,7 +306,7 @@ export default function VaultScreen({ onBack }) {
       const basename = selectedItem.filePath.split("/").pop() || selectedItem.filePath;
       window.open(`/api/uploads/${basename}`, "_blank", "noopener,noreferrer");
     }
-  }, [selectedItem]);
+  }, [selectedItem, selectedKind, load]);
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
@@ -226,7 +315,13 @@ export default function VaultScreen({ onBack }) {
           <>
             <button
               type="button"
-              onClick={handleBackFromFolder}
+              onClick={() => {
+                if (initialFolder && selectedKind === initialFolder && initialAppliedRef.current) {
+                  onBack();
+                } else {
+                  handleBackFromFolder();
+                }
+              }}
               className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
               aria-label="Volver"
             >
@@ -240,7 +335,7 @@ export default function VaultScreen({ onBack }) {
               onClick={async () => {
                 setLoadingKind(true);
                 try {
-                  const list = selectedKind === "favorite" ? await getFavorites() : await getInboxByKind(selectedKind);
+                  const list = await fetchFolderItems(selectedKind);
                   setItemsByKind(Array.isArray(list) ? list : []);
                 } finally {
                   setLoadingKind(false);
@@ -333,7 +428,7 @@ export default function VaultScreen({ onBack }) {
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
                 Carpetas
               </h2>
-              <div className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 {folders.map((f) => {
                   const Icon = ICON_BY_KIND[f.kind] ?? FileText;
                   const label = f.name || KIND_LABEL[f.kind] || f.kind;
@@ -342,17 +437,16 @@ export default function VaultScreen({ onBack }) {
                       key={f.kind}
                       type="button"
                       onClick={() => handleFolderClick(f.kind)}
-                      className="flex items-center justify-between p-4 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/80 dark:border-zinc-700/50 dark:hover:bg-zinc-800"
+                      className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-center hover:bg-zinc-100 transition-colors dark:bg-zinc-800/80 dark:border-zinc-700/50 dark:hover:bg-zinc-800"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-11 h-11 rounded-xl bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center">
-                          <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-300" />
-                        </div>
-                        <span className="text-zinc-900 dark:text-zinc-100 font-medium">{label}</span>
+                      <div className="w-10 h-10 rounded-xl bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center">
+                        <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-300" />
                       </div>
-                      <span className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 text-sm tabular-nums">
+                      <span className="text-zinc-900 dark:text-zinc-100 font-medium text-sm leading-tight line-clamp-2">
+                        {label}
+                      </span>
+                      <span className="text-zinc-500 dark:text-zinc-400 text-xs tabular-nums">
                         {f.count} {f.count === 1 ? "ítem" : "ítems"}
-                        <ChevronRight className="w-4 h-4" />
                       </span>
                     </button>
                   );
@@ -450,8 +544,26 @@ export default function VaultScreen({ onBack }) {
             ) : (
               <>
                 <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
-                  {selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? "Ítem"}
+                  {selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? (selectedItem.content?.slice(0, 50) || "Ítem")}
                 </p>
+                {isNoteItem && (
+                  <div className="mb-4">
+                    <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-2">
+                      Ver nota
+                    </p>
+                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 p-3 max-h-48 overflow-y-auto">
+                      {loadingNote ? (
+                        <div className="flex items-center justify-center py-6">
+                          <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />
+                        </div>
+                      ) : (
+                        <p className="text-zinc-800 dark:text-zinc-200 text-sm whitespace-pre-wrap break-words">
+                          {fullNoteContent ?? selectedItem.content ?? "—"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-3">
                   {(selectedItem.url || selectedItem.filePath) && (
                     <button
@@ -460,7 +572,7 @@ export default function VaultScreen({ onBack }) {
                       className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-brand-500/50 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-sm font-medium flex items-center justify-center gap-2"
                     >
                       <ExternalLink className="w-4 h-4" />
-                      {selectedItem.url ? "Abrir enlace" : "Ver archivo"}
+                      {selectedItem.url ? "Abrir enlace" : (selectedItem.kind === "photo" || selectedItem.sourceKind === "photo") ? "Abrir imagen" : (selectedItem.kind === "video" || selectedItem.sourceKind === "video") ? "Ver video" : "Ver archivo"}
                     </button>
                   )}
                   <button

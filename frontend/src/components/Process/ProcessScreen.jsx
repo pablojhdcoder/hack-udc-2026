@@ -43,7 +43,7 @@ function getRawPreview(item) {
   return "Sin contenido";
 }
 
-export default function ProcessScreen({ onBack, onProcessDone }) {
+export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -53,6 +53,7 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
   const [editedContent, setEditedContent] = useState(DEFAULT_NOTE_BODY);
   const [processing, setProcessing] = useState(false);
   const [processError, setProcessError] = useState(null);
+  const [successInfo, setSuccessInfo] = useState(null);
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
@@ -101,13 +102,22 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
     setProcessError(null);
     setProcessing(true);
     try {
-      await processItems(
+      const destination = suggestedFolder.trim() || MOCK_FOLDERS[0];
+      const data = await processItems(
         [{ kind: currentItem.kind, id: currentItem.id }],
-        suggestedFolder.trim() || MOCK_FOLDERS[0]
+        destination
       );
+      const result = Array.isArray(data.results) ? data.results[0] : null;
+      const kind = currentItem.kind;
+      const id = currentItem.id;
+      setSuccessInfo({
+        destination,
+        processedPath: result?.processedPath ?? null,
+        kind,
+        id,
+      });
       onProcessDone?.();
       await loadInbox();
-      if (items.length <= 1) onBack();
     } catch (err) {
       setProcessError(err?.message ?? "Error al procesar");
     } finally {
@@ -135,6 +145,27 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
   if (items.length === 0) {
     return (
       <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
+        {successInfo && (
+          <div className="fixed top-4 left-4 right-4 z-40 flex justify-center pointer-events-none">
+            <button
+              type="button"
+              onClick={() => {
+                setSuccessInfo(null);
+                onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
+              }}
+              className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl px-4 py-3 flex items-center gap-3 border border-emerald-400/70"
+            >
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                <Check className="w-5 h-5" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-semibold">Idea guardada en el baúl</p>
+                <p className="text-xs opacity-90 truncate">Ruta: {successInfo.destination}</p>
+              </div>
+              <span className="text-xs font-medium underline decoration-white/70 underline-offset-2">Ver</span>
+            </button>
+          </div>
+        )}
         <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
           <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Volver">
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
@@ -142,8 +173,32 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
           <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
           <div className="w-10" />
         </header>
-        <main className="flex-1 flex items-center justify-center px-6">
-          <p className="text-zinc-600 dark:text-zinc-500 text-sm text-center">No hay ítems en la fábrica de las ideas.</p>
+        <main className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+          <p className="text-zinc-700 dark:text-zinc-300 text-lg font-medium text-center">Tu cerebro está despejado</p>
+          <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center">
+            {successInfo ? "La idea se ha guardado en el baúl. Pulsa «Ver» arriba para ir a la carpeta o vuelve a la fábrica." : "No hay más ideas por procesar."}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            {successInfo && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccessInfo(null);
+                  onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
+                }}
+                className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium"
+              >
+                Ver en el Baúl
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Volver a la fábrica
+            </button>
+          </div>
         </main>
       </div>
     );
@@ -154,6 +209,31 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 safe-bottom">
+      {successInfo && (
+        <div className="fixed top-4 left-4 right-4 z-40 flex justify-center pointer-events-none">
+          <button
+            type="button"
+            onClick={() => {
+              setSuccessInfo(null);
+              onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
+            }}
+            className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl px-4 py-3 flex items-center gap-3 border border-emerald-400/70"
+          >
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+              <Check className="w-5 h-5" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-semibold">Idea guardada en el baúl</p>
+              <p className="text-xs opacity-90 truncate">
+                Ruta: {successInfo.destination}
+              </p>
+            </div>
+            <span className="text-xs font-medium underline decoration-white/70 underline-offset-2">
+              Ver
+            </span>
+          </button>
+        </div>
+      )}
       <header className="shrink-0 z-20 flex flex-col bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
         <div className="flex items-center h-14 px-4">
           <button

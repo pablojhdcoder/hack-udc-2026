@@ -66,6 +66,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all_dates");
+  const [vaultInitial, setVaultInitial] = useState({ folder: null, itemId: null });
   const [darkMode, setDarkMode] = useState(() => {
     try {
       return localStorage.getItem("digitalbrain-theme") !== "light";
@@ -133,6 +134,10 @@ export default function App() {
         <ProcessScreen
           onBack={() => setCurrentView("inbox")}
           onProcessDone={loadInbox}
+          onOpenVault={(params) => {
+            if (params?.kind) setVaultInitial({ folder: params.kind, itemId: params.id ?? null });
+            setCurrentView("procesado");
+          }}
         />
       </MobileFrame>
     );
@@ -141,7 +146,14 @@ export default function App() {
   if (currentView === "procesado") {
     return (
       <MobileFrame>
-        <VaultScreen onBack={() => setCurrentView("inbox")} />
+        <VaultScreen
+          onBack={() => {
+            setVaultInitial({ folder: null, itemId: null });
+            setCurrentView("inbox");
+          }}
+          initialFolder={vaultInitial.folder}
+          initialItemId={vaultInitial.itemId}
+        />
       </MobileFrame>
     );
   }

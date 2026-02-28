@@ -107,3 +107,15 @@ model Favorite {
 
   @@unique([kind, sourceId])
 }
+
+// Estado de apertura (para "Novedades": procesados aún no abiertos).
+model ViewState {
+  id           String   @id @default(cuid())
+  kind         String   // note | link | file | photo | audio | video
+  sourceId     String   // id del ítem original
+  openedCount  Int      @default(0)
+  lastOpenedAt DateTime?
+  createdAt    DateTime @default(now())
+
+  @@unique([kind, sourceId])
+}

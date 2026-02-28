@@ -318,6 +318,37 @@ router.get("/folders", async (req, res) => {
       prisma.video.count(),
       prisma.favorite.count(),
     ]);
+
+    const ITEM_KIND_MODELS = {
+      note: prisma.note,
+      link: prisma.link,
+      file: prisma.file,
+      photo: prisma.photo,
+      audio: prisma.audio,
+      video: prisma.video,
+    };
+
+    const getOpenedIds = async (kind) => {
+      const rows = await prisma.viewState.findMany({
+        where: { kind, openedCount: { gt: 0 } },
+        select: { sourceId: true },
+      });
+      return rows.map((r) => r.sourceId);
+    };
+
+    const noveltyCountByKind = await Promise.all(
+      Object.entries(ITEM_KIND_MODELS).map(async ([kind, model]) => {
+        const openedIds = await getOpenedIds(kind);
+        return model.count({
+          where: {
+            inboxStatus: "processed",
+            ...(openedIds.length ? { id: { notIn: openedIds } } : {}),
+          },
+        });
+      })
+    );
+    const noveltyCount = noveltyCountByKind.reduce((acc, n) => acc + (Number(n) || 0), 0);
+
     const folders = [
       { kind: "note", name: "Notas", count: notesCount },
       { kind: "link", name: "Enlaces", count: linksCount },
@@ -325,9 +356,112 @@ router.get("/folders", async (req, res) => {
       { kind: "photo", name: "Fotos", count: photosCount },
       { kind: "audio", name: "Audio", count: audiosCount },
       { kind: "video", name: "Video", count: videosCount },
+      { kind: "novelty", name: "Novedades", count: noveltyCount },
       { kind: "favorite", name: "Favoritos", count: favoritesCount },
     ];
     res.json({ folders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// POST /api/inbox/opened — Marcar un ítem como abierto (para Novedades)
+// ──────────────────────────────────────────────
+
+router.post("/opened", async (req, res) => {
+  const { kind, id } = req.body ?? {};
+  const allowed = ["note", "link", "file", "photo", "audio", "video"];
+  if (!allowed.includes(kind) || typeof id !== "string" || !id.trim()) {
+    return res.status(400).json({ error: "Se requiere { kind, id } válido" });
+  }
+  try {
+    const now = new Date();
+    const existing = await prisma.viewState.findUnique({
+      where: { kind_sourceId: { kind, sourceId: id } },
+    });
+    if (!existing) {
+      await prisma.viewState.create({
+        data: { kind, sourceId: id, openedCount: 1, lastOpenedAt: now },
+      });
+    } else {
+      await prisma.viewState.update({
+        where: { kind_sourceId: { kind, sourceId: id } },
+        data: { openedCount: { increment: 1 }, lastOpenedAt: now },
+      });
+    }
+    return res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// GET /api/inbox/novelties — Ítems procesados aún no abiertos (carpeta Novedades)
+// ──────────────────────────────────────────────
+
+router.get("/novelties", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const kinds = ["note", "link", "file", "photo", "audio", "video"];
+    const perKind = Math.max(1, Math.ceil(limit / kinds.length));
+
+    const modelMap = {
+      link: prisma.link,
+      note: prisma.note,
+      file: prisma.file,
+      photo: prisma.photo,
+      audio: prisma.audio,
+      video: prisma.video,
+    };
+
+    const openedByKind = await Promise.all(
+      kinds.map(async (k) => {
+        const rows = await prisma.viewState.findMany({
+          where: { kind: k, openedCount: { gt: 0 } },
+          select: { sourceId: true },
+        });
+        return [k, rows.map((r) => r.sourceId)];
+      })
+    );
+    const openedIds = Object.fromEntries(openedByKind);
+
+    const resultsByKind = await Promise.all(
+      kinds.map(async (k) => {
+        const model = modelMap[k];
+        const ids = openedIds[k] ?? [];
+        const items = await model.findMany({
+          where: {
+            inboxStatus: "processed",
+            ...(ids.length ? { id: { notIn: ids } } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: perKind,
+        });
+        return items.map((item) => {
+          const base = {
+            kind: k,
+            id: item.id,
+            title: toItemTitle(item, k),
+            inboxStatus: item.inboxStatus,
+            processedPath: item.processedPath,
+            createdAt: item.createdAt,
+          };
+          if (k === "link") return { ...base, url: item.url, type: item.type };
+          if (k === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
+          if (k === "file" || k === "photo") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
+          if (k === "audio" || k === "video") return { ...base, type: item.type, filePath: item.filePath };
+          return base;
+        });
+      })
+    );
+
+    const unified = resultsByKind
+      .flat()
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, limit);
+
+    res.json(unified);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -639,6 +773,7 @@ router.delete("/:kind/:id", async (req, res) => {
 
   try {
     await model.delete({ where: { id } });
+    await prisma.viewState.deleteMany({ where: { kind, sourceId: id } });
     return res.status(204).send();
   } catch (err) {
     if (err.code === "P2025") return res.status(404).json({ error: "No encontrado" });
