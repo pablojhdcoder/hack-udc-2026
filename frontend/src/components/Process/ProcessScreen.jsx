@@ -11,9 +11,8 @@ import {
   Trash2,
   Pencil,
   Check,
-  ChevronDown,
-  Folder,
   Save,
+  X,
 } from "lucide-react";
 import { getInbox, processItems, discardItem } from "../../api/client";
 
@@ -26,14 +25,47 @@ const ICON_BY_KIND = {
   video: Video,
 };
 
-const MOCK_FOLDERS = [
-  "estudio/SI",
-  "proyectos/HackUDC",
-  "referencias/React",
-  "inbox",
-];
+/** Destino por tipo de ítem (la IA / sistema decide, no el usuario). */
+function getDestinationFromKind(kind) {
+  const map = { note: "notas", link: "enlaces", file: "archivos", photo: "fotos", audio: "audio", video: "videos" };
+  return map[kind] ?? "notas";
+}
 
-const DEFAULT_NOTE_BODY = "Punto principal extraído de la entrada\nSegundo punto o referencia\nContexto o acción sugerida";
+/** Etiqueta para el badge "Se guardará en: [Tipo]" */
+function getTypeLabel(item) {
+  if (!item) return "Nota";
+  const kindLabels = { note: "Nota", link: "Enlace", file: "Archivo", photo: "Foto", audio: "Audio", video: "Vídeo" };
+  return kindLabels[item.kind] ?? item.type ?? "Nota";
+}
+
+/** Extrae resumen de la IA del ítem (aiEnrichment.summary o aiSummary). */
+function getAISummary(item) {
+  if (!item) return null;
+  if (item.aiSummary && typeof item.aiSummary === "string") return item.aiSummary.trim();
+  if (item.aiEnrichment) {
+    try {
+      const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
+      if (data?.summary) return String(data.summary).trim();
+    } catch {}
+  }
+  return null;
+}
+
+/** Topics/tags del ítem para las píldoras (#topic). */
+function getItemTopics(item) {
+  const list = [];
+  if (item?.topic && String(item.topic).trim()) list.push(String(item.topic).trim());
+  if (item?.aiEnrichment) {
+    try {
+      const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
+      const tags = data?.tags;
+      if (Array.isArray(tags)) tags.forEach((t) => t && list.push(String(t).trim()));
+    } catch {}
+  }
+  return [...new Set(list)];
+}
+
+const DEFAULT_NOTE_BODY = "Breve resumen generado por IA sobre el contenido capturado...";
 
 function getRawPreview(item) {
   if (item.content) return item.content;
@@ -47,8 +79,6 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [suggestedFolder, setSuggestedFolder] = useState(MOCK_FOLDERS[0]);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(DEFAULT_NOTE_BODY);
   const [processing, setProcessing] = useState(false);
@@ -73,9 +103,11 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   }, [loadInbox]);
 
   useEffect(() => {
-    setEditedContent(DEFAULT_NOTE_BODY);
+    const item = items[currentIndex];
+    const summary = item ? getAISummary(item) : null;
+    setEditedContent(summary || DEFAULT_NOTE_BODY);
     setIsEditing(false);
-  }, [currentIndex]);
+  }, [currentIndex, items]);
 
   const currentItem = items[currentIndex];
   const total = items.length;
@@ -102,7 +134,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
     setProcessError(null);
     setProcessing(true);
     try {
-      const destination = suggestedFolder.trim() || MOCK_FOLDERS[0];
+      const destination = currentItem ? getDestinationFromKind(currentItem.kind) : "notas";
       const data = await processItems(
         [{ kind: currentItem.kind, id: currentItem.id }],
         destination
@@ -147,23 +179,37 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
       <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
         {successInfo && (
           <div className="fixed top-4 left-4 right-4 z-40 flex justify-center pointer-events-none">
-            <button
-              type="button"
-              onClick={() => {
-                setSuccessInfo(null);
-                onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
-              }}
-              className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl px-4 py-3 flex items-center gap-3 border border-emerald-400/70"
-            >
-              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-                <Check className="w-5 h-5" />
+            <div className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl p-4 flex justify-between items-start border border-emerald-400/70">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Idea guardada en el baúl</p>
+                  <p className="text-xs opacity-90 truncate">Ruta: {successInfo.destination}</p>
+                </div>
               </div>
-              <div className="flex-1 text-left">
-                <p className="text-sm font-semibold">Idea guardada en el baúl</p>
-                <p className="text-xs opacity-90 truncate">Ruta: {successInfo.destination}</p>
+              <div className="flex flex-row items-center gap-2 ml-4 flex-shrink-0 -mt-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSuccessInfo(null);
+                    onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
+                  }}
+                  className="text-xs font-medium underline decoration-white/70 underline-offset-2"
+                >
+                  Ver
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSuccessInfo(null)}
+                  className="p-1 text-white/70 hover:text-white rounded-full hover:bg-white/20 transition-colors cursor-pointer"
+                  aria-label="Cerrar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <span className="text-xs font-medium underline decoration-white/70 underline-offset-2">Ver</span>
-            </button>
+            </div>
           </div>
         )}
         <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
@@ -211,27 +257,39 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 safe-bottom">
       {successInfo && (
         <div className="fixed top-4 left-4 right-4 z-40 flex justify-center pointer-events-none">
-          <button
-            type="button"
-            onClick={() => {
-              setSuccessInfo(null);
-              onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
-            }}
-            className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl px-4 py-3 flex items-center gap-3 border border-emerald-400/70"
-          >
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
-              <Check className="w-5 h-5" />
+          <div className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl p-4 flex justify-between items-start border border-emerald-400/70">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/10 flex items-center justify-center">
+                <Check className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Idea guardada en el baúl</p>
+                <p className="text-xs opacity-90 truncate">
+                  Ruta: {successInfo.destination}
+                </p>
+              </div>
             </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-semibold">Idea guardada en el baúl</p>
-              <p className="text-xs opacity-90 truncate">
-                Ruta: {successInfo.destination}
-              </p>
+            <div className="flex flex-row items-center gap-2 ml-4 flex-shrink-0 -mt-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccessInfo(null);
+                  onOpenVault?.({ kind: successInfo.kind, id: successInfo.id });
+                }}
+                className="text-xs font-medium underline decoration-white/70 underline-offset-2"
+              >
+                Ver
+              </button>
+              <button
+                type="button"
+                onClick={() => setSuccessInfo(null)}
+                className="p-1 text-white/70 hover:text-white rounded-full hover:bg-white/20 transition-colors cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <span className="text-xs font-medium underline decoration-white/70 underline-offset-2">
-              Ver
-            </span>
-          </button>
+          </div>
         </div>
       )}
       <header className="shrink-0 z-20 flex flex-col bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
@@ -282,38 +340,8 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
 
         {/* 3. Tarjeta Sugerencia de IA (protagonista) */}
         <section className="rounded-2xl bg-zinc-50 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10 p-4 dark:bg-gray-800 dark:border-blue-500/40 dark:shadow-blue-500/10">
-          <div className="relative mb-4">
-            <button
-              type="button"
-              onClick={() => setDropdownOpen((o) => !o)}
-              className="w-full flex items-center gap-2 px-4 py-2.5 rounded-full bg-white border border-zinc-200 text-brand-600 text-sm font-medium dark:bg-gray-900 dark:border-0 dark:text-blue-400/90 cursor-pointer"
-            >
-              <Folder className="w-4 h-4 text-brand-500 dark:text-blue-400/80 flex-shrink-0" />
-              <span className="flex-1 text-left truncate">{suggestedFolder}</span>
-              <ChevronDown className={`w-4 h-4 text-zinc-400 dark:text-gray-400 flex-shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
-            </button>
-            {dropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} aria-hidden />
-                <ul className="absolute top-full left-0 right-0 mt-2 z-20 py-1 rounded-2xl bg-white border border-zinc-200 shadow-xl max-h-48 overflow-y-auto dark:bg-gray-900 dark:border-gray-700">
-                  {MOCK_FOLDERS.map((folder) => (
-                    <li key={folder}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSuggestedFolder(folder);
-                          setDropdownOpen(false);
-                        }}
-                        className={`w-full px-4 py-2.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-gray-800 flex items-center gap-2 ${suggestedFolder === folder ? "text-brand-600 dark:text-blue-400" : "text-zinc-800 dark:text-gray-200"}`}
-                      >
-                        <Folder className="w-4 h-4 opacity-70" />
-                        {folder}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+          <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-gray-400 dark:bg-gray-900/60 w-max px-2 py-1 rounded-md mb-3">
+            Se guardará en: {getTypeLabel(currentItem)}
           </div>
 
           <div className="mb-4 relative">
@@ -345,25 +373,23 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
               <textarea
                 value={editedContent}
                 onChange={(e) => setEditedContent(e.target.value)}
-                className="w-full min-h-[120px] rounded-lg bg-gray-900 text-white p-3 border border-gray-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50"
-                placeholder="Edita el contenido de la nota..."
+                className="w-full min-h-[120px] rounded-lg bg-gray-900 text-white p-3 border border-gray-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50 dark:bg-gray-900 dark:border-gray-700"
+                placeholder="Edita el resumen..."
               />
             ) : (
-              <ul className="list-disc list-inside space-y-2 text-zinc-700 dark:text-gray-200 text-sm">
-                {editedContent.split("\n").filter(Boolean).map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
+              <p className="text-sm text-gray-600 dark:text-gray-300 italic mb-4 leading-relaxed pr-10">
+                {editedContent}
+              </p>
             )}
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {["#React", "#Frontend", "#HackUDC"].map((tag) => (
+            {getItemTopics(currentItem).map((topic) => (
               <span
-                key={tag}
-                className="bg-brand-500/10 text-brand-600 dark:bg-blue-500/10 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium"
+                key={topic}
+                className="bg-blue-500/10 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium mr-2"
               >
-                {tag}
+                #{topic}
               </span>
             ))}
           </div>
