@@ -38,16 +38,16 @@ export default function FilterBottomSheet({
         aria-label="Cerrar"
       />
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-zinc-200 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom max-h-[85vh] overflow-y-auto dark:bg-zinc-900 dark:border-zinc-800"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-zinc-200 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom max-h-[85vh] overflow-y-auto dark:bg-neutral-900 dark:border-neutral-800"
         aria-modal="true"
         aria-label="Opciones de filtro"
       >
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 sticky top-0 bg-white dark:bg-zinc-900">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 sticky top-0 bg-white dark:bg-neutral-900">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Filtros</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
             aria-label="Cerrar"
           >
             <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
@@ -70,7 +70,7 @@ export default function FilterBottomSheet({
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
                       activeTypeFilter === opt.id
                         ? "bg-brand-500/20 text-brand-600 dark:text-brand-400"
-                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                        : "hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
                     }`}
                   >
                     {opt.label}
@@ -96,7 +96,7 @@ export default function FilterBottomSheet({
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
                       activeDateFilter === opt.id
                         ? "bg-brand-500/20 text-brand-600 dark:text-brand-400"
-                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+                        : "hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
                     }`}
                   >
                     {opt.label}

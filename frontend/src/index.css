@@ -10,16 +10,24 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  background-color: #000000;
 }
 
-/* Tema claro: fondo blanco/azulado cuando no hay .dark en html */
+/* Tema claro: fondo claro cuando no hay .dark en html */
 html:not(.dark) body,
 html:not(.dark) #root {
   background: #f8fafc;
 }
 
+/* Dark: fondo negro puro fuera del contenedor de la app (bordes del navegador) */
+html.dark body,
+html.dark #root {
+  background-color: #000000;
+}
+
 #root {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Safe area for mobile notches */

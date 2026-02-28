@@ -159,9 +159,9 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
 
   if (loading) {
     return (
-      <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
-        <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
-          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Volver">
+      <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
+        <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
+          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800" aria-label="Volver">
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>
           <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
@@ -176,7 +176,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
 
   if (items.length === 0) {
     return (
-      <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
+      <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
         {successInfo && (
           <div className="fixed top-4 left-4 right-4 z-40 flex justify-center pointer-events-none">
             <div className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl p-4 flex justify-between items-start border border-emerald-400/70">
@@ -212,8 +212,8 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
             </div>
           </div>
         )}
-        <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
-          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Volver">
+        <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
+          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800" aria-label="Volver">
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>
           <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
@@ -240,7 +240,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
             <button
               type="button"
               onClick={onBack}
-              className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-neutral-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-neutral-800"
             >
               Volver a la fábrica
             </button>
@@ -254,7 +254,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   const rawPreview = getRawPreview(currentItem);
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 safe-bottom">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900 safe-bottom">
       {successInfo && (
         <div className="fixed top-4 left-4 right-4 z-40 flex justify-center pointer-events-none">
           <div className="pointer-events-auto max-w-md w-full rounded-2xl bg-emerald-500 text-white shadow-xl p-4 flex justify-between items-start border border-emerald-400/70">
@@ -292,12 +292,12 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
           </div>
         </div>
       )}
-      <header className="shrink-0 z-20 flex flex-col bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
+      <header className="shrink-0 z-20 flex flex-col bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
         <div className="flex items-center h-14 px-4">
           <button
             type="button"
             onClick={onBack}
-            className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors"
             aria-label="Volver a la fábrica de las ideas"
           >
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
@@ -324,9 +324,9 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
           </div>
         )}
         {/* 2. Tarjeta Entrada Original (secundaria) */}
-        <section className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 dark:bg-gray-800/40 dark:border-gray-700/50">
+        <section className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 dark:bg-neutral-800/40 dark:border-neutral-700/50">
           <div className="flex gap-3">
-            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-500/10 dark:bg-gray-700/60 flex items-center justify-center">
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-500/10 dark:bg-neutral-700/60 flex items-center justify-center">
               <IconComponent className="w-5 h-5 text-brand-500 dark:text-gray-500" />
             </div>
             <div className="flex-1 min-w-0">
@@ -339,8 +339,8 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
         </section>
 
         {/* 3. Tarjeta Sugerencia de IA (protagonista) */}
-        <section className="rounded-2xl bg-zinc-50 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10 p-4 dark:bg-gray-800 dark:border-blue-500/40 dark:shadow-blue-500/10">
-          <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-gray-400 dark:bg-gray-900/60 w-max px-2 py-1 rounded-md mb-3">
+        <section className="rounded-2xl bg-zinc-50 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10 p-4 dark:bg-neutral-800 dark:border-blue-500/40 dark:shadow-blue-500/10">
+          <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-neutral-400 dark:bg-neutral-900/60 w-max px-2 py-1 rounded-md mb-3">
             Se guardará en: {getTypeLabel(currentItem)}
           </div>
 
@@ -359,7 +359,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                 <button
                   type="button"
                   onClick={() => setIsEditing(true)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-white dark:hover:text-white transition-colors hover:bg-gray-700/50"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-white dark:hover:text-white transition-colors hover:bg-neutral-700/50"
                   aria-label="Editar"
                 >
                   <Pencil className="w-4 h-4" />
@@ -373,7 +373,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
               <textarea
                 value={editedContent}
                 onChange={(e) => setEditedContent(e.target.value)}
-                className="w-full min-h-[120px] rounded-lg bg-gray-900 text-white p-3 border border-gray-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50 dark:bg-gray-900 dark:border-gray-700"
+                className="w-full min-h-[120px] rounded-lg bg-neutral-900 text-white p-3 border border-neutral-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50 dark:bg-neutral-900 dark:border-neutral-700"
                 placeholder="Edita el resumen..."
               />
             ) : (
@@ -396,7 +396,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
         </section>
       </main>
 
-      <footer className="shrink-0 z-20 grid grid-cols-2 gap-3 w-full px-5 pt-4 pb-6 bg-white border-t border-zinc-200 safe-bottom dark:bg-zinc-900 dark:border-zinc-800">
+      <footer className="shrink-0 z-20 grid grid-cols-2 gap-3 w-full px-5 pt-4 pb-6 bg-white border-t border-zinc-200 safe-bottom dark:bg-neutral-900 dark:border-neutral-800">
         <button
           type="button"
           onClick={handleDescartar}

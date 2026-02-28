@@ -32,8 +32,8 @@ function ToggleSwitch({ on = true, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-zinc-900 ${
-        on ? "bg-emerald-500" : "bg-gray-600"
+      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900 ${
+        on ? "bg-emerald-500" : "bg-neutral-600"
       }`}
       role="switch"
       aria-checked={on}
@@ -51,11 +51,11 @@ function SettingsGroup({ title, children }) {
   return (
     <section className="mb-6">
       {title && (
-        <h2 className="text-xs font-medium text-zinc-500 dark:text-gray-500 uppercase tracking-wider px-1 mb-2">
+        <h2 className="text-xs font-medium text-zinc-500 dark:text-neutral-500 uppercase tracking-wider px-1 mb-2">
           {title}
         </h2>
       )}
-      <div className="bg-zinc-100 dark:bg-gray-800 rounded-2xl overflow-hidden border border-zinc-200 dark:border-transparent">
+      <div className="bg-zinc-100 dark:bg-neutral-800 rounded-2xl overflow-hidden border border-zinc-200 dark:border-transparent">
         {children}
       </div>
     </section>
@@ -65,13 +65,13 @@ function SettingsGroup({ title, children }) {
 function SettingsRow({ icon: Icon, label, children, isLast, danger }) {
   return (
     <div
-      className={`flex items-center gap-3 py-3 px-4 ${!isLast ? "border-b border-zinc-200 dark:border-gray-700" : ""}`}
+      className={`flex items-center gap-3 py-3 px-4 ${!isLast ? "border-b border-zinc-200 dark:border-neutral-700" : ""}`}
     >
       {Icon && (
         <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
-          danger ? "bg-red-500/10" : "bg-brand-500/10 dark:bg-gray-700/60"
+          danger ? "bg-red-500/10" : "bg-brand-500/10 dark:bg-neutral-700/60"
         }`}>
-          <Icon className={`w-4 h-4 ${danger ? "text-red-500" : "text-brand-500 dark:text-gray-300"}`} />
+          <Icon className={`w-4 h-4 ${danger ? "text-red-500" : "text-brand-500 dark:text-neutral-300"}`} />
         </div>
       )}
       <span className={`flex-1 text-sm font-medium ${danger ? "text-red-500" : "text-zinc-900 dark:text-white"}`}>
@@ -100,7 +100,7 @@ function BottomSheet({ isOpen, onClose, title, children }) {
         aria-label={title}
       >
         <div
-          className="w-full bg-gray-800 rounded-t-2xl p-6 border-t border-gray-700 pointer-events-auto safe-bottom animate-slide-in-bottom"
+          className="w-full bg-neutral-800 rounded-t-2xl p-6 border-t border-neutral-700 pointer-events-auto safe-bottom animate-slide-in-bottom"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-4">
@@ -108,7 +108,7 @@ function BottomSheet({ isOpen, onClose, title, children }) {
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors"
               aria-label="Cerrar"
             >
               <X className="w-5 h-5" />
@@ -139,7 +139,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel
         aria-label={title}
       >
         <div
-          className="w-11/12 max-w-sm bg-gray-800 rounded-2xl p-6 border border-gray-700 pointer-events-auto animate-slide-in-bottom"
+          className="w-11/12 max-w-sm bg-neutral-800 rounded-2xl p-6 border border-neutral-700 pointer-events-auto animate-slide-in-bottom"
           onClick={(e) => e.stopPropagation()}
         >
           <h2 className="text-lg font-semibold text-white mb-2">{title}</h2>
@@ -148,7 +148,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmLabel
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl border border-gray-600 text-gray-300 hover:bg-gray-700 transition-colors text-sm font-medium"
+              className="flex-1 py-2.5 rounded-xl border border-neutral-600 text-neutral-300 hover:bg-neutral-700 transition-colors text-sm font-medium"
             >
               {cancelLabel}
             </button>
@@ -179,7 +179,7 @@ function Toast({ message, visible, onDismiss }) {
 
   if (!visible) return null;
   return (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl shadow-xl text-white text-sm animate-slide-in-bottom safe-bottom">
+    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] px-4 py-3 bg-gray-800 border border-neutral-700 rounded-xl shadow-xl text-white text-sm animate-slide-in-bottom safe-bottom">
       {message}
     </div>
   );
@@ -204,12 +204,12 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
   const selectedLanguage = LANGUAGES.find((l) => l.id === summaryLanguageId) ?? LANGUAGES[0];
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
-      <header className="shrink-0 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
+      <header className="shrink-0 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
         <button
           type="button"
           onClick={onBack}
-          className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
           aria-label="Volver"
         >
           <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
@@ -220,13 +220,13 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
 
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-5 scrollbar-hide">
         <div className="flex items-center gap-4 mb-8 py-4">
-          <div className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-            <User className="w-8 h-8 text-brand-500 dark:text-gray-400" />
+          <div className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-neutral-700 flex items-center justify-center flex-shrink-0">
+            <User className="w-8 h-8 text-brand-500 dark:text-neutral-400" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-zinc-900 dark:text-white font-semibold text-base">María Pérez</p>
-            <p className="text-zinc-600 dark:text-gray-400 text-sm">Estudiante</p>
-            <p className="text-zinc-500 dark:text-gray-500 text-sm truncate">maria@ejemplo.com</p>
+            <p className="text-zinc-600 dark:text-neutral-400 text-sm">Estudiante</p>
+            <p className="text-zinc-500 dark:text-neutral-500 text-sm truncate">maria@ejemplo.com</p>
           </div>
         </div>
 
@@ -243,28 +243,28 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
           <button
             type="button"
             onClick={() => setExportSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={FileDown} label="Exportar mis notas" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
           <button
             type="button"
             onClick={() => setCloudSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={Cloud} label="Copia de seguridad en la nube" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
           <button
             type="button"
             onClick={() => setFreeSpaceModalOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={Trash2} label="Liberar espacio" isLast={true}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
@@ -273,21 +273,21 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
           <button
             type="button"
             onClick={() => setAssistLevelSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={Bot} label="Nivel de asistencia de la IA" isLast={false}>
-              <span className="text-zinc-600 dark:text-gray-400 text-sm mr-1">{assistLevel}</span>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <span className="text-zinc-600 dark:text-neutral-400 text-sm mr-1">{assistLevel}</span>
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
           <button
             type="button"
             onClick={() => setLanguageSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={Globe} label="Idioma de los resúmenes" isLast={true}>
-              <span className="text-zinc-600 dark:text-gray-400 text-sm mr-1">{selectedLanguage.label}</span>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <span className="text-zinc-600 dark:text-neutral-400 text-sm mr-1">{selectedLanguage.label}</span>
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
@@ -296,25 +296,25 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
           <button
             type="button"
             onClick={() => setEditProfileSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={UserPen} label="Editar perfil" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
           <button
             type="button"
             onClick={() => setToastVisible(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={HelpCircle} label="Centro de ayuda" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-gray-500 flex-shrink-0" />
+              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
             </SettingsRow>
           </button>
           <button
             type="button"
             onClick={() => setLogoutModalOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-gray-700/30 active:bg-zinc-200 dark:active:bg-gray-700/50 transition-colors"
+            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
           >
             <SettingsRow icon={LogOut} label="Cerrar sesión" isLast={true} danger>
               <ChevronRight className="w-5 h-5 text-red-500 flex-shrink-0" />
@@ -334,10 +334,10 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
             tabIndex={0}
             aria-label="Cerrar"
           />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-800 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom border-t border-gray-700 p-6">
+          <div className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-800 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom border-t border-neutral-700 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white">Idioma de los resúmenes</h2>
-              <button type="button" onClick={() => setLanguageSheetOpen(false)} className="p-2 rounded-lg hover:bg-gray-700 text-gray-400" aria-label="Cerrar">
+              <button type="button" onClick={() => setLanguageSheetOpen(false)} className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400" aria-label="Cerrar">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -348,7 +348,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
                     type="button"
                     onClick={() => { setSummaryLanguageId(lang.id); setLanguageSheetOpen(false); }}
                     className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-colors ${
-                      summaryLanguageId === lang.id ? "bg-brand-500/20 text-brand-400" : "hover:bg-gray-700 text-gray-200"
+                      summaryLanguageId === lang.id ? "bg-brand-500/20 text-brand-400" : "hover:bg-neutral-700 text-neutral-200"
                     }`}
                   >
                     <span className="text-sm font-medium">{lang.label}</span>
@@ -369,7 +369,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               key={format}
               type="button"
               onClick={() => setExportSheetOpen(false)}
-              className="w-full px-4 py-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors text-left"
+              className="w-full px-4 py-3 rounded-xl bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-medium transition-colors text-left"
             >
               {format}
             </button>
@@ -385,7 +385,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               key={provider}
               type="button"
               onClick={() => setCloudSheetOpen(false)}
-              className="w-full px-4 py-3 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors text-left"
+              className="w-full px-4 py-3 rounded-xl bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-medium transition-colors text-left"
             >
               {provider}
             </button>
@@ -402,7 +402,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               type="button"
               onClick={() => { setAssistLevel(level); setAssistLevelSheetOpen(false); }}
               className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-colors text-left ${
-                assistLevel === level ? "bg-brand-500/20 text-brand-400" : "bg-gray-700 hover:bg-gray-600 text-gray-200"
+                assistLevel === level ? "bg-brand-500/20 text-brand-400" : "bg-neutral-700 hover:bg-neutral-600 text-neutral-200"
               }`}
             >
               {level}
@@ -449,7 +449,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
             <input
               type="text"
               defaultValue="María Pérez"
-              className="w-full rounded-xl bg-gray-700 border border-gray-600 px-4 py-3 text-white text-sm placeholder-gray-500 outline-none focus:ring-2 focus:ring-brand-500/50"
+              className="w-full rounded-xl bg-neutral-700 border border-neutral-600 px-4 py-3 text-white text-sm placeholder-gray-500 outline-none focus:ring-2 focus:ring-brand-500/50"
               placeholder="Tu nombre"
             />
           </div>
@@ -458,7 +458,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
             <input
               type="email"
               defaultValue="maria@ejemplo.com"
-              className="w-full rounded-xl bg-gray-700 border border-gray-600 px-4 py-3 text-white text-sm placeholder-gray-500 outline-none focus:ring-2 focus:ring-brand-500/50"
+              className="w-full rounded-xl bg-neutral-700 border border-neutral-600 px-4 py-3 text-white text-sm placeholder-gray-500 outline-none focus:ring-2 focus:ring-brand-500/50"
               placeholder="tu@email.com"
             />
           </div>

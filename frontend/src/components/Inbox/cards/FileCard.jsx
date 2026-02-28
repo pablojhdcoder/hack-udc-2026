@@ -34,9 +34,9 @@ export default function FileCard({ item }) {
   const isImage = item.fileType === "image" && previewUrl;
 
   return (
-    <article className="rounded-xl bg-zinc-50 border border-zinc-200 overflow-hidden dark:bg-zinc-800/80 dark:border-zinc-700/50">
+    <article className="rounded-xl bg-zinc-50 border border-zinc-200 overflow-hidden dark:bg-neutral-800/80 dark:border-neutral-700/50">
       {isImage && (
-        <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
+        <div className="aspect-video bg-zinc-200 dark:bg-neutral-800 flex items-center justify-center">
           <img
             src={previewUrl}
             alt=""

@@ -49,10 +49,10 @@ function SearchResultCard({ item, onSelect }) {
       <button
         type="button"
         onClick={() => onSelect(item)}
-        className="w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+        className="w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-neutral-800/60 dark:border-neutral-700/50 dark:hover:bg-neutral-800/80"
       >
         {showThumbnail && item.thumbnailUrl ? (
-          <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex-shrink-0">
+          <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 dark:bg-neutral-700 flex-shrink-0">
             <img
               src={item.thumbnailUrl}
               alt=""
@@ -62,7 +62,7 @@ function SearchResultCard({ item, onSelect }) {
             />
           </div>
         ) : (
-          <div className="w-12 h-12 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
+          <div className="w-12 h-12 rounded-lg bg-brand-500/10 dark:bg-neutral-700 flex items-center justify-center flex-shrink-0">
             <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
           </div>
         )}
@@ -399,14 +399,14 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   }, [selectedItem, selectedKind, load]);
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
-      <header className="shrink-0 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
+      <header className="shrink-0 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
         {searchOpen ? (
           <div className="flex items-center gap-2 w-full">
             <button
               type="button"
               onClick={handleCloseSearch}
-              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0"
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800 shrink-0"
               aria-label="Cerrar búsqueda"
             >
               <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
@@ -418,7 +418,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
               placeholder="Buscar en el baúl (por nombre o tema)..."
-              className="flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
+              className="flex-1 min-w-0 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
               aria-label="Buscar"
             />
             <button
@@ -440,7 +440,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                   handleBackFromFolder();
                 }
               }}
-              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
               aria-label="Volver"
             >
               <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
@@ -452,7 +452,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
                 aria-label="Buscar"
               >
                 <Search className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -468,7 +468,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     setLoadingKind(false);
                   }
                 }}
-                className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
                 aria-label="Recargar"
               >
                 <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -480,7 +480,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             <button
               type="button"
               onClick={handleBack}
-              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
               aria-label="Volver"
             >
               <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
@@ -492,7 +492,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
-                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
                 aria-label="Buscar"
               >
                 <Search className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -500,7 +500,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <button
                 type="button"
                 onClick={() => load()}
-                className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
                 aria-label="Recargar"
               >
                 <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
@@ -539,9 +539,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     <button
                       type="button"
                       onClick={() => setSelectedItem(item)}
-                      className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+                      className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-neutral-800/60 dark:border-neutral-700/50 dark:hover:bg-neutral-800/80"
                     >
-                      <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                      <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-neutral-700 flex items-center justify-center flex-shrink-0">
                         <Icon className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -592,9 +592,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                       key={f.kind}
                       type="button"
                       onClick={() => handleFolderClick(f.kind)}
-                      className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-center hover:bg-zinc-100 transition-colors dark:bg-zinc-800/80 dark:border-zinc-700/50 dark:hover:bg-zinc-800"
+                      className="flex flex-col items-center justify-center gap-2 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-center hover:bg-zinc-100 transition-colors dark:bg-neutral-800/80 dark:border-neutral-700/50 dark:hover:bg-neutral-800"
                     >
-                      <div className="w-10 h-10 rounded-xl bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-xl bg-brand-500/10 dark:bg-neutral-700 flex items-center justify-center">
                         <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-300" />
                       </div>
                       <span className="text-zinc-900 dark:text-zinc-100 font-medium text-sm leading-tight line-clamp-2">
@@ -660,9 +660,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         <button
                           type="button"
                           onClick={() => setSelectedItem(item)}
-                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-neutral-800/60 dark:border-neutral-700/50 dark:hover:bg-neutral-800/80"
                         >
-                          <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                          <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-neutral-700 flex items-center justify-center flex-shrink-0">
                             <Icon className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
                           </div>
                           <div className="flex-1 min-w-0">
@@ -705,7 +705,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-zinc-900 p-4 pb-safe shadow-xl"
+            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             {showDeleteConfirm ? (
@@ -742,7 +742,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-2">
                       Ver nota
                     </p>
-                    <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/80 p-3 max-h-48 overflow-y-auto">
+                    <div className="rounded-xl border border-zinc-200 dark:border-neutral-700 bg-zinc-50 dark:bg-neutral-800/80 p-3 max-h-48 overflow-y-auto">
                       {loadingNote ? (
                         <div className="flex items-center justify-center py-6">
                           <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />
