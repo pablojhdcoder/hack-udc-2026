@@ -49,28 +49,35 @@ async function ensureEnrichment(kind, id, entity) {
     return entity;
   }
 
+  const enrichmentPayload = (enrichment) => {
+    const { topic, ...enrichmentOnly } = enrichment;
+    const data = { aiEnrichment: JSON.stringify(enrichmentOnly) };
+    if (topic != null && String(topic).trim()) data.topic = String(topic).trim().slice(0, 120);
+    return data;
+  };
+
   console.log(`[ensureEnrichment] Llamando a enriquecer con IA...`);
   let enrichment;
   try {
     switch (kind) {
       case "note":
         enrichment = await enrichNote(entity.content);
-        await prisma.note.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        await prisma.note.update({ where: { id }, data: enrichmentPayload(enrichment) });
         break;
       case "link":
         enrichment = await enrichLink(entity.url, entity.metadata ?? {});
-        await prisma.link.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        await prisma.link.update({ where: { id }, data: enrichmentPayload(enrichment) });
         break;
       case "file": {
         const absolutePath = resolveFilePath(entity.filePath);
         enrichment = await enrichFile(absolutePath, entity.type, entity.filename);
-        await prisma.file.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        await prisma.file.update({ where: { id }, data: enrichmentPayload(enrichment) });
         break;
       }
       case "audio": {
         const absolutePath = resolveFilePath(entity.filePath);
         enrichment = await enrichAudio(absolutePath, entity.type);
-        const payload = { aiEnrichment: JSON.stringify(enrichment) };
+        const payload = enrichmentPayload(enrichment);
         if (enrichment.transcription) payload.transcription = enrichment.transcription;
         await prisma.audio.update({ where: { id }, data: payload });
         break;
@@ -78,7 +85,7 @@ async function ensureEnrichment(kind, id, entity) {
       case "video": {
         const filename = path.basename(entity.filePath);
         enrichment = await enrichVideo(filename, entity.type);
-        await prisma.video.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        await prisma.video.update({ where: { id }, data: enrichmentPayload(enrichment) });
         break;
       }
       default:

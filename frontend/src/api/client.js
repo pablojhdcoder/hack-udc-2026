@@ -213,3 +213,13 @@ export async function getKnowledgeFolder(path) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+/**
+ * Contenido de un fichero .md en knowledge (para el visor).
+ * @param {string} path - ruta relativa, ej. "estudio/SI/nota-1.md"
+ */
+export async function getKnowledgeFile(path) {
+  const res = await fetch(`${API_BASE}/knowledge/${path}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.text();
+}
