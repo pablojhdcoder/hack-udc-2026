@@ -70,7 +70,7 @@ export async function getInbox() {
 
 /**
  * Añade un ítem al inbox.
- * Los archivos siempre se suben al backend (para tener id real y poder procesarlos).
+ * Texto, enlaces y archivos siempre se envían al backend para que se guarden en la BD y aparezcan en la lista.
  * @param {object} payload - { content?: string, url?: string } para texto/enlace, o { file: File } para subir archivo
  */
 export async function addToInbox(payload) {
@@ -87,8 +87,6 @@ export async function addToInbox(payload) {
     return item;
   }
 
-  if (USE_MOCK) return addMockToInbox(payload);
-
   const body = {};
   if (payload.url != null) body.url = payload.url;
   if (payload.content != null) body.content = payload.content;
@@ -100,7 +98,9 @@ export async function addToInbox(payload) {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  const item = await res.json();
+  if (USE_MOCK) mockItems.push({ ...item, kind: item.kind, inboxStatus: item.inboxStatus ?? "pending" });
+  return item;
 }
 
 /**
