@@ -113,6 +113,7 @@ router.post("/", optionalMulter, async (req, res) => {
           type: audio.type,
           filePath: audio.filePath,
           createdAt: audio.createdAt,
+          inboxStatus: "pending",
           aiEnrichmentPending: aiActive,
         });
       }
@@ -137,6 +138,7 @@ router.post("/", optionalMulter, async (req, res) => {
           type: video.type,
           filePath: video.filePath,
           createdAt: video.createdAt,
+          inboxStatus: "pending",
           aiEnrichmentPending: aiActive,
         });
       }
@@ -162,7 +164,9 @@ router.post("/", optionalMulter, async (req, res) => {
         type: file.type,
         filename: file.filename,
         filePath: file.filePath,
+        fileType: file.type,
         createdAt: file.createdAt,
+        inboxStatus: "pending",
         aiEnrichmentPending: aiActive,
       });
     }
@@ -223,6 +227,7 @@ router.post("/", optionalMulter, async (req, res) => {
         title: final.title ?? preview.title ?? null,
         metadata: final.metadata ? JSON.parse(final.metadata) : undefined,
         createdAt: final.createdAt,
+        inboxStatus: "pending",
         aiEnrichmentPending: aiActive,
       });
     }
@@ -247,8 +252,109 @@ router.post("/", optionalMulter, async (req, res) => {
       type: note.type,
       content: note.content,
       createdAt: note.createdAt,
+      inboxStatus: "pending",
       aiEnrichmentPending: aiActive,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// GET /api/inbox/folders — Carpetas (tipos) con conteo desde la BD
+// ──────────────────────────────────────────────
+
+router.get("/folders", async (req, res) => {
+  try {
+    const [notesCount, linksCount, filesCount, audiosCount, videosCount] = await Promise.all([
+      prisma.note.count(),
+      prisma.link.count(),
+      prisma.file.count(),
+      prisma.audio.count(),
+      prisma.video.count(),
+    ]);
+    const folders = [
+      { kind: "note", name: "Notas", count: notesCount },
+      { kind: "link", name: "Enlaces", count: linksCount },
+      { kind: "file", name: "Archivos", count: filesCount },
+      { kind: "audio", name: "Audio", count: audiosCount },
+      { kind: "video", name: "Video", count: videosCount },
+    ];
+    res.json({ folders });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// GET /api/inbox/processed/recent — Últimos ítems procesados (mezcla por tipo para que aparezcan audios, etc.)
+// ──────────────────────────────────────────────
+
+function parseAI(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function toItemTitle(item, kind) {
+  if (kind === "note") return (item.content || "").slice(0, 50) || "Nota";
+  if (kind === "link") return item.title || item.url?.slice(0, 40) || "Enlace";
+  if (kind === "file") return item.filename || "Archivo";
+  if (kind === "audio") return (parseAI(item.aiEnrichment)?.title) || "Nota de voz";
+  if (kind === "video") return item.title || (parseAI(item.aiEnrichment)?.title) || "Vídeo";
+  return "Ítem";
+}
+
+router.get("/processed/recent", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    const perKind = Math.max(1, Math.ceil(limit / 5));
+    const [links, files, audios, notes, videos] = await Promise.all([
+      prisma.link.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
+      prisma.file.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
+      prisma.audio.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
+      prisma.note.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
+      prisma.video.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
+    ]);
+    const unified = [
+      ...notes.map((item) => ({ kind: "note", id: item.id, title: toItemTitle(item, "note"), processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), processedPath: item.processedPath, createdAt: item.createdAt })),
+    ]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, limit);
+    res.json(unified);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// GET /api/inbox/by-kind/:kind — Todos los ítems de un tipo (pending + processed) para Tu Cerebro
+// ──────────────────────────────────────────────
+
+router.get("/by-kind/:kind", async (req, res) => {
+  const { kind } = req.params;
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const model = modelMap[kind];
+  if (!model) return res.status(400).json({ error: "kind inválido" });
+
+  try {
+    const items = await model.findMany({ orderBy: { createdAt: "desc" } });
+    const list = items.map((item) => ({
+      kind,
+      id: item.id,
+      title: toItemTitle(item, kind),
+      inboxStatus: item.inboxStatus,
+      processedPath: item.processedPath,
+      createdAt: item.createdAt,
+    }));
+    res.json(list);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -350,6 +456,25 @@ router.get("/:kind/:id", async (req, res) => {
       aiEnrichment,
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// DELETE /api/inbox/:kind/:id — Descartar/borrar un ítem del inbox
+// ──────────────────────────────────────────────
+
+router.delete("/:kind/:id", async (req, res) => {
+  const { kind, id } = req.params;
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const model = modelMap[kind];
+  if (!model) return res.status(400).json({ error: "kind inválido" });
+
+  try {
+    await model.delete({ where: { id } });
+    return res.status(204).send();
+  } catch (err) {
+    if (err.code === "P2025") return res.status(404).json({ error: "No encontrado" });
     res.status(500).json({ error: err.message });
   }
 });
