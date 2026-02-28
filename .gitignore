@@ -5,6 +5,7 @@ build/
 .env
 .env.local
 .env.*
+backend/.env
 
 *.db
 *.db-journal
