@@ -59,7 +59,11 @@ function discardMockItem(kind, id) {
 }
 
 // ——— API real
-/** Normaliza respuesta: backend devuelve array; el frontend espera { items } */
+/**
+ * Obtiene la lista de ítems pendientes del inbox.
+ * Siempre devuelve una Promesa (async): se resuelve cuando el backend responde.
+ * @returns {Promise<{ items: Array }>}
+ */
 export async function getInbox() {
   if (USE_MOCK) return getMockInbox();
   const res = await fetch(`${API_BASE}/inbox`);

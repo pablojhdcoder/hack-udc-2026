@@ -152,6 +152,22 @@ export default function App() {
     setSidebarOpen(false);
   }, []);
 
+  const handleProcess = useCallback(async () => {
+    if (loadingProcessData) return;
+    if (filteredItems.length === 0) return;
+    setLoadingProcessData(true);
+    try {
+      const resultado = await getInbox();
+      const list = Array.isArray(resultado?.items) ? resultado.items : [];
+      setProcessInboxItems(list);
+      setCurrentView("procesando");
+    } catch (error) {
+      console.error("Hubo un error procesando la nota:", error);
+    } finally {
+      setLoadingProcessData(false);
+    }
+  }, [loadingProcessData, filteredItems.length]);
+
   if (currentView === "procesando") {
     return (
       <MobileFrame>
@@ -255,19 +271,7 @@ export default function App() {
         <FooterCapture
           pendingCount={filteredItems.length}
           processLoading={loadingProcessData}
-          onProcessClick={async () => {
-            if (loadingProcessData) return;
-            setLoadingProcessData(true);
-            try {
-              const { items: list } = await getInbox();
-              setProcessInboxItems(Array.isArray(list) ? list : []);
-              setCurrentView("procesando");
-            } catch (err) {
-              console.error("Error al procesar:", err);
-            } finally {
-              setLoadingProcessData(false);
-            }
-          }}
+          onProcessClick={handleProcess}
           onAdd={handleAddToInbox}
         />
 

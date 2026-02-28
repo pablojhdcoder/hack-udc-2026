@@ -53,6 +53,12 @@ function getAISummary(item) {
   return null;
 }
 
+/** True si el ítem ya tiene resumen/título de la IA (no está esperando enriquecimiento). */
+function hasRealEnrichment(item) {
+  const summary = getAISummary(item);
+  return !!summary && String(summary).trim().length > 0;
+}
+
 /** Extrae el título de la IA del ítem (aiEnrichment.title). */
 function getAITitle(item) {
   if (!item?.aiEnrichment) return null;
@@ -136,6 +142,29 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
   const total = items.length;
   const progress = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
 
+  const isAnalyzing = currentItem && !hasRealEnrichment(currentItem);
+
+  useEffect(() => {
+    if (!isAnalyzing || !currentItem) return;
+    const id = currentItem.id;
+    const kind = currentItem.kind;
+    const interval = setInterval(async () => {
+      try {
+        const { items: fresh } = await getInbox();
+        const list = Array.isArray(fresh) ? fresh : [];
+        const updated = list.find((i) => i.id === id && i.kind === kind);
+        if (updated && hasRealEnrichment(updated)) {
+          setItems((prev) => prev.map((it) => (it.id === id && it.kind === kind ? updated : it)));
+        }
+      } catch {
+        // ignore
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [isAnalyzing, currentItem?.id, currentItem?.kind]);
+
+  const fallbackSummary = t("processing.aiSummaryFallback");
+
   const handleDescartar = async () => {
     if (!currentItem) return;
     setProcessError(null);
@@ -172,7 +201,7 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
       const finalTopics = topicsInput.split(",").map((t) => t.trim()).filter(Boolean);
 
       const originalTitle = getAITitle(currentItem) || "";
-      const originalSummary = getAISummary(currentItem) || DEFAULT_NOTE_BODY;
+      const originalSummary = getAISummary(currentItem) || fallbackSummary;
       const originalTopics = getItemTopics(currentItem);
 
       const titleChanged = editedTitle !== originalTitle;
@@ -398,7 +427,7 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
             <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-neutral-400 dark:bg-neutral-900/60 px-2 py-1 rounded-md">
               {t("processing.saveIn")} {getTypeLabel(currentItem, t)}
             </div>
-            {isEditing ? (
+            {!isAnalyzing && (isEditing ? (
               <button
                 type="button"
                 onClick={handleSaveEdit}
@@ -416,44 +445,53 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
               >
                 <Pencil className="w-4 h-4" />
               </button>
-            )}
+            ))}
           </div>
 
-          {/* Título de la IA */}
-          <div className="mb-3">
-            {isEditing ? (
-              <input
-                type="text"
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                className="w-full rounded-lg bg-neutral-900 text-white px-3 py-2 border border-neutral-700 text-sm outline-none focus:ring-2 focus:ring-brand-500/50 font-semibold"
-                placeholder={t("processing.itemTitlePlaceholder")}
-                maxLength={80}
-              />
-            ) : (
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white leading-tight">
-                {editedTitle || getTypeLabel(currentItem, t)}
-              </h3>
-            )}
-          </div>
-
-          {/* Resumen de la IA */}
-          <div className="mb-4">
-            {isEditing ? (
-              <textarea
-                value={editedSummary}
-                onChange={(e) => setEditedSummary(e.target.value)}
-                className="w-full min-h-[100px] rounded-lg bg-neutral-900 text-white p-3 border border-neutral-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50"
-                placeholder={t("processing.editSummaryPlaceholder")}
-              />
-            ) : (
-              <p className="text-sm text-gray-600 dark:text-gray-300 italic leading-relaxed">
-                {editedSummary}
+          {isAnalyzing ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-4 transition-opacity">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-400 dark:text-blue-400 shrink-0" />
+              <p className="text-sm text-blue-400 dark:text-blue-400 font-medium animate-pulse">
+                {t("processing.aiAnalyzing")}
               </p>
-            )}
-          </div>
+            </div>
+          ) : (
+            <>
+              {/* Título de la IA */}
+              <div className="mb-3">
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editedTitle}
+                    onChange={(e) => setEditedTitle(e.target.value)}
+                    className="w-full rounded-lg bg-neutral-900 text-white px-3 py-2 border border-neutral-700 text-sm outline-none focus:ring-2 focus:ring-brand-500/50 font-semibold"
+                    placeholder={t("processing.itemTitlePlaceholder")}
+                    maxLength={80}
+                  />
+                ) : (
+                  <h3 className="text-xl font-bold text-zinc-900 dark:text-white leading-tight">
+                    {editedTitle || getTypeLabel(currentItem, t)}
+                  </h3>
+                )}
+              </div>
 
-          {currentItem?.detectedEvent && (
+              {/* Resumen de la IA */}
+              <div className="mb-4">
+                {isEditing ? (
+                  <textarea
+                    value={editedSummary}
+                    onChange={(e) => setEditedSummary(e.target.value)}
+                    className="w-full min-h-[100px] rounded-lg bg-neutral-900 text-white p-3 border border-neutral-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50"
+                    placeholder={t("processing.editSummaryPlaceholder")}
+                  />
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-300 italic leading-relaxed">
+                    {editedSummary}
+                  </p>
+                )}
+              </div>
+
+              {currentItem?.detectedEvent && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 mb-4 flex items-start gap-3">
               <CalendarPlus className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" aria-hidden />
               <div className="min-w-0 flex-1">
@@ -497,6 +535,8 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
               </div>
             )
           )}
+            </>
+          )}
         </section>
       </main>
 
@@ -516,8 +556,8 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
           <button
             type="button"
             onClick={handleAprobar}
-            disabled={processing}
-            className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:pointer-events-none"
+            disabled={processing || isAnalyzing}
+            className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
             aria-label={t("common.approve")}
           >
             {processing ? (
