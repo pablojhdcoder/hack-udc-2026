@@ -448,7 +448,13 @@ router.get("/novelties", async (req, res) => {
           take: perKind,
         });
         const toUploadUrl = (fp) => (fp ? `/api/uploads/${path.basename(String(fp).replace(/\\/g, "/"))}` : null);
+        const normalizeAIEnrichment = (raw) => {
+          const ai = parseAI(raw);
+          const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+          return { aiTitle: ai?.title ?? null, aiSummary: ai?.summary ?? null, aiLanguage: ai?.language ?? null, aiCategory: ai?.category ?? null, aiTopics: topics, aiTags: topics };
+        };
         return items.map((item) => {
+          const ai = normalizeAIEnrichment(item.aiEnrichment);
           const base = {
             kind: k,
             id: item.id,
@@ -456,9 +462,10 @@ router.get("/novelties", async (req, res) => {
             inboxStatus: item.inboxStatus,
             processedPath: item.processedPath,
             createdAt: item.createdAt,
+            ...ai,
           };
           if (k === "link") return { ...base, url: item.url, type: item.type };
-          if (k === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
+          if (k === "note") return { ...base, content: (item.content || "").slice(0, 200), filename: (item.content || "").slice(0, 80) || "Nota", type: item.type };
           if (k === "file") {
             const filePath = item.filePath;
             const thumbnailUrl = (item.type === "image" || item.type === "photo") ? toUploadUrl(filePath) : null;
@@ -469,8 +476,8 @@ router.get("/novelties", async (req, res) => {
             const thumbnailUrl = toUploadUrl(filePath);
             return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
           }
-          if (k === "audio") return { ...base, type: item.type, filePath: item.filePath };
-          if (k === "video") return { ...base, type: item.type, filePath: item.filePath };
+          if (k === "audio") return { ...base, filename: ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath };
+          if (k === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath };
           return base;
         });
       })
@@ -613,13 +620,25 @@ router.get("/processed/recent", async (req, res) => {
       prisma.note.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
       prisma.video.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
     ]);
+    const normalizeAIEnrichment = (raw) => {
+      const ai = parseAI(raw);
+      const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+      return {
+        aiTitle:    ai?.title    ?? null,
+        aiSummary:  ai?.summary  ?? null,
+        aiLanguage: ai?.language ?? null,
+        aiCategory: ai?.category ?? null,
+        aiTopics:   topics,
+        aiTags:     topics,
+      };
+    };
     const unified = [
-      ...notes.map((item) => ({ kind: "note", id: item.id, title: toItemTitle(item, "note"), processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), url: item.url, processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...notes.map((item) => ({ kind: "note", id: item.id, title: toItemTitle(item, "note"), content: (item.content || "").slice(0, 200), filename: (item.content || "").slice(0, 80) || "Nota", processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), filename: item.title || item.url?.slice(0, 50) || "Enlace", url: item.url, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
     ]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, limit);
@@ -641,7 +660,20 @@ router.get("/by-kind/:kind", async (req, res) => {
 
   try {
     const items = await model.findMany({ orderBy: { createdAt: "desc" } });
+    const normalizeAIEnrichment = (raw) => {
+      const ai = parseAI(raw);
+      const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+      return {
+        aiTitle:    ai?.title    ?? null,
+        aiSummary:  ai?.summary  ?? null,
+        aiLanguage: ai?.language ?? null,
+        aiCategory: ai?.category ?? null,
+        aiTopics:   topics,
+        aiTags:     topics,
+      };
+    };
     const list = items.map((item) => {
+      const ai = normalizeAIEnrichment(item.aiEnrichment);
       const base = {
         kind,
         id: item.id,
@@ -649,6 +681,7 @@ router.get("/by-kind/:kind", async (req, res) => {
         inboxStatus: item.inboxStatus,
         processedPath: item.processedPath,
         createdAt: item.createdAt,
+        ...ai,
       };
       const uploadThumbUrl = (fp) => (fp ? `/api/uploads/${path.basename(String(fp).replace(/\\/g, "/"))}` : null);
       if (kind === "file") {
@@ -662,9 +695,9 @@ router.get("/by-kind/:kind", async (req, res) => {
         return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
       }
       if (kind === "link") return { ...base, url: item.url, type: item.type };
-      if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
-      if (kind === "audio") return { ...base, type: item.type, filePath: item.filePath };
-      if (kind === "video") return { ...base, type: item.type, filePath: item.filePath };
+      if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), filename: (item.content || "").slice(0, 80) || "Nota", type: item.type };
+      if (kind === "audio") return { ...base, filename: ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath };
+      if (kind === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath };
       return base;
     });
     res.json(list);

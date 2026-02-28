@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X } from "lucide-react";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X, Tag, FolderOpen, Globe, Calendar } from "lucide-react";
 import FilePreview from "../shared/FilePreview";
 import {
   getVaultFolders,
@@ -709,7 +709,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl"
+            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl overflow-y-auto max-h-[85vh]"
             onClick={(e) => e.stopPropagation()}
           >
             {showDeleteConfirm ? (
@@ -738,9 +738,72 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               </>
             ) : (
               <>
-                <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
-                  {selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? (selectedItem.content?.slice(0, 50) || "Ítem")}
-                </p>
+                {/* Handle */}
+                <div className="w-10 h-1 bg-zinc-200 dark:bg-neutral-700 rounded-full mx-auto mb-4" />
+
+                {/* Título */}
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-white leading-snug mb-4">
+                  {selectedItem.aiTitle ?? selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? (selectedItem.content?.slice(0, 50) || "Ítem")}
+                </h2>
+
+                {/* Metadata IA */}
+                <div className="space-y-3 mb-4">
+                  {/* Resumen */}
+                  {selectedItem.aiSummary && (
+                    <div className="rounded-xl bg-zinc-50 dark:bg-neutral-800/70 border border-zinc-200 dark:border-neutral-700/50 px-4 py-3">
+                      <p className="text-xs text-zinc-500 dark:text-neutral-400 font-medium uppercase tracking-wider mb-1">Resumen</p>
+                      <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed">{selectedItem.aiSummary}</p>
+                    </div>
+                  )}
+
+                  {/* Categoría + Idioma */}
+                  {(selectedItem.aiCategory || selectedItem.aiLanguage) && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedItem.aiCategory && (
+                        <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-500/30 rounded-full px-3 py-1.5">
+                          <FolderOpen className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 shrink-0" />
+                          <span className="text-xs text-violet-700 dark:text-violet-300 font-medium">{selectedItem.aiCategory}</span>
+                        </div>
+                      )}
+                      {selectedItem.aiLanguage && (
+                        <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-full px-3 py-1.5">
+                          <Globe className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400 shrink-0" />
+                          <span className="text-xs text-zinc-600 dark:text-neutral-300 font-medium uppercase">{selectedItem.aiLanguage}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Topics */}
+                  {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Tag className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
+                        <span className="text-xs text-zinc-500 dark:text-neutral-500 font-medium uppercase tracking-wider">Temas</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).map((tag) => (
+                          <span
+                            key={tag}
+                            className="text-xs bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full"
+                          >
+                            #{String(tag).trim().toLowerCase()}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fecha */}
+                  {selectedItem.createdAt && (
+                    <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-neutral-500">
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      <span>{new Date(selectedItem.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Nota completa */}
                 {isNoteItem && (
                   <div className="mb-4">
                     <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-2">
