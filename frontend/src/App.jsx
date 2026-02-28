@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Brain, Send, X } from "lucide-react";
+import { Brain, Send, X, Loader2 } from "lucide-react";
 import MobileFrame from "./components/Layout/MobileFrame";
 import Header from "./components/Inbox/Header";
 import Sidebar from "./components/Inbox/Sidebar";
@@ -55,6 +55,8 @@ export default function App() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all_dates");
   const [vaultInitial, setVaultInitial] = useState({ folder: null, itemId: null });
+  const [loadingProcessData, setLoadingProcessData] = useState(false);
+  const [processInboxItems, setProcessInboxItems] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
     try {
       return localStorage.getItem("digitalbrain-theme") !== "light";
@@ -153,10 +155,15 @@ export default function App() {
     return (
       <MobileFrame>
         <ProcessScreen
-          onBack={() => setCurrentView("inbox")}
+          initialItems={processInboxItems}
+          onBack={() => {
+            setProcessInboxItems(null);
+            setCurrentView("inbox");
+          }}
           onProcessDone={loadInbox}
           onOpenVault={(params) => {
             if (params?.kind) setVaultInitial({ folder: params.kind, itemId: params.id ?? null });
+            setProcessInboxItems(null);
             setCurrentView("procesado");
           }}
         />
@@ -223,9 +230,10 @@ export default function App() {
               {error}
             </div>
           )}
-          {loading ? (
-            <div className="flex items-center justify-center py-12 text-zinc-600 dark:text-zinc-500 text-sm">
-              Cargando la fábrica de ideas…
+          {loading || loadingProcessData ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-600 dark:text-zinc-500 text-sm">
+              <Loader2 className="w-8 h-8 text-brand-500 dark:text-zinc-500 animate-spin" />
+              <span>{loadingProcessData ? "Preparando procesado…" : "Cargando la fábrica de ideas…"}</span>
             </div>
           ) : (
             <InboxList items={filteredItems} />
@@ -233,7 +241,21 @@ export default function App() {
         </main>
         <FooterCapture
           pendingCount={filteredItems.length}
-          onProcessClick={() => setCurrentView("procesando")}
+          processLoading={loadingProcessData}
+          onProcessClick={async () => {
+            if (loadingProcessData) return;
+            setLoadingProcessData(true);
+            try {
+              const { items: data } = await getInbox();
+              const list = Array.isArray(data) ? data : [];
+              setProcessInboxItems(list);
+              setCurrentView("procesando");
+            } catch {
+              setLoadingProcessData(false);
+            } finally {
+              setLoadingProcessData(false);
+            }
+          }}
           onAdd={handleAddToInbox}
         />
 

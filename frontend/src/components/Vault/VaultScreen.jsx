@@ -54,15 +54,12 @@ function VaultListItem({ item, onSelect, searchTokens }) {
     (item.content?.slice(0, 50) || "Sin título");
   const formattedDate = formatDate(item.createdAt);
 
-  // Cuando hay búsqueda activa, determinar qué tags/topic coinciden
+  // Un solo origen de temas: aiTopics (backend envía aiTags = aiTopics)
+  const topicsList = item.aiTopics ?? item.aiTags ?? [];
   const hasSearch = searchTokens && searchTokens.length > 0;
   const matchTag = (str) =>
-    hasSearch && searchTokens.some((t) => str.toLowerCase().includes(t));
+    hasSearch && str && searchTokens.some((t) => String(str).toLowerCase().includes(t));
 
-  const matchingTags = hasSearch
-    ? (item.aiTags ?? []).filter((tag) => matchTag(tag))
-    : [];
-  const topicMatches = hasSearch && item.topic && matchTag(item.topic);
   const categoryMatches = hasSearch && item.aiCategory && matchTag(item.aiCategory);
 
   // Barra de relevancia: normaliza sobre 60 (puntuación alta razonable para 1 token)
@@ -78,32 +75,28 @@ function VaultListItem({ item, onSelect, searchTokens }) {
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
           <div className="flex flex-wrap items-center mt-1 gap-x-2 gap-y-1">
-            {item.topic && (
-              <span
-                className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full mr-2 ${
-                  topicMatches
-                    ? "text-emerald-300 bg-emerald-950/60 ring-1 ring-emerald-500/40"
-                    : "text-blue-400 bg-blue-500/10 dark:bg-blue-500/20"
-                }`}
-              >
-                #{String(item.topic).trim().toLowerCase()}
-              </span>
-            )}
-            {matchingTags.map((tag) => (
-              <span
-                key={tag}
-                className="text-xs text-amber-300 bg-amber-950/50 ring-1 ring-amber-500/40 px-2 py-0.5 rounded-md"
-              >
-                {tag}
-              </span>
-            ))}
+            {topicsList.map((tag) => {
+              const isMatch = matchTag(tag);
+              return (
+                <span
+                  key={tag}
+                  className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                    isMatch
+                      ? "text-amber-300 bg-amber-950/50 ring-1 ring-amber-500/40"
+                      : "text-blue-400 bg-blue-500/10 dark:bg-blue-500/20"
+                  }`}
+                >
+                  #{String(tag).trim().toLowerCase()}
+                </span>
+              );
+            })}
             {categoryMatches && (
               <span className="text-xs text-violet-300 bg-violet-950/50 ring-1 ring-violet-500/40 px-2 py-0.5 rounded-md">
                 {item.aiCategory}
               </span>
             )}
             {formattedDate && (
-              <span className="text-xs text-neutral-500 dark:text-zinc-400">{item.topic ? "• " : ""}{formattedDate}</span>
+              <span className="text-xs text-neutral-500 dark:text-zinc-400">{topicsList.length > 0 ? "• " : ""}{formattedDate}</span>
             )}
           </div>
           {hasSearch && scorePercent > 0 && (

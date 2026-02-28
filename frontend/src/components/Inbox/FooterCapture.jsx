@@ -1,10 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Mic, Send, Paperclip, Camera, FileUp, Square, X } from "lucide-react";
+import { Mic, Send, Paperclip, Camera, FileUp, Square, X, Loader2 } from "lucide-react";
 
 export default function FooterCapture({
   onProcessClick,
   pendingCount = 0,
   onAdd,
+  processLoading = false,
 }) {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -308,9 +309,17 @@ export default function FooterCapture({
             <button
               type="button"
               onClick={onProcessClick}
-              className="w-full py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-sm transition-colors"
+              disabled={processLoading}
+              className="w-full py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-sm transition-colors disabled:opacity-70 disabled:pointer-events-none flex items-center justify-center gap-2"
             >
-              Procesar {pendingCount} notas
+              {processLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Preparando…
+                </>
+              ) : (
+                `Procesar ${pendingCount} notas`
+              )}
             </button>
           </div>
         </div>
