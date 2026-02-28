@@ -41,7 +41,7 @@ export function isAIEnabled() {
 // (evitamos la SDK de OpenAI que añade api-version automáticamente)
 // ──────────────────────────────────────────────
 
-async function azureChat(messages, maxTokens = 800) {
+async function azureChat(messages, maxTokens = 400) {
   const url = apiUrl(`/openai/deployments/${DEPLOYMENT}/chat/completions`);
   console.log(`[azureChat] POST ${url}`);
 
@@ -76,37 +76,38 @@ async function azureChat(messages, maxTokens = 800) {
 }
 
 // ──────────────────────────────────────────────
-// Esquema de enriquecimiento estándar esperado:
+// Esquema de enriquecimiento:
 // {
-//   title, summary, tags, topics, topic, language, keyPoints,
-//   sentiment?, category?, enrichedAt
+//   title      → máx 30 caracteres, representativo del contenido
+//   topics     → array de 3-5 palabras clave específicas y NO redundantes entre sí
+//   language   → código ISO ("es", "en", ...)
+//   category   → categoría amplia y descriptiva
+//   enrichedAt → timestamp ISO
 // }
-// topic = 1-2 palabras, consistente para agrupar contenido relacionado
 // ──────────────────────────────────────────────
 
-const TOPIC_INSTRUCTION = `IMPORTANTE - Campo "topic": debes incluir SIEMPRE un campo "topic" con UNA o DOS palabras como máximo (sustantivo común o frase muy corta). Este topic debe ser CONSISTENTE para agrupar contenido relacionado: usa el mismo topic para cosas que traten del mismo ámbito. Ejemplos: un documento sobre un perro y otro sobre comida para perros → ambos "perro" o "animales"; recetas y ingredientes de cocina → "cocina"; apuntes de una asignatura → el nombre de la asignatura o "estudio". Usa el idioma del contenido. Preferir términos amplios y reutilizables.`;
-
 const SYSTEM_PROMPT = `Eres un asistente experto en análisis y clasificación de contenido digital para un "Second Brain" personal.
-Tu tarea es extraer metadatos ricos y estructurados del contenido que se te proporciona.
-Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.
-Sé conciso pero completo. Los tags deben estar en minúsculas y sin espacios (usa guiones si hace falta).
-${TOPIC_INSTRUCTION}`;
+Tu tarea es extraer metadatos mínimos y estructurados del contenido que se te proporciona.
+Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.`;
 
-/** Normaliza topic a 1-2 palabras (el modelo a veces devuelve más). */
-function normalizeTopic(topic) {
-  if (topic == null || typeof topic !== "string") return null;
-  const trimmed = topic.trim().slice(0, 80);
-  const words = trimmed.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return null;
-  return words.slice(0, 2).join(" ") || null;
-}
+const TOPICS_INSTRUCTION = `IMPORTANTE - Campo "topics": incluye entre 3 y 5 palabras clave ESPECÍFICAS del contenido.
+Cada topic debe representar un aspecto distinto (temática, tecnología, contexto, disciplina, etc.).
+Las palabras NO deben ser redundantes, similares ni sinónimas entre sí — cada una debe aportar información nueva.
+Sé específico: evita términos genéricos como "tecnología", "documento", "contenido" o "general".
+Usa el idioma del contenido.`;
+
+const JSON_SCHEMA = `{
+  "title": "título representativo (máx 30 caracteres)",
+  "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
+  "language": "es|en|...",
+  "category": "categoría amplia y descriptiva"
+}`;
 
 function withTimestamp(data) {
-  const topic = normalizeTopic(data.topic ?? data.topics?.[0]);
-  return { ...data, topic: topic || data.topic, enrichedAt: new Date().toISOString() };
+  return { ...data, enrichedAt: new Date().toISOString() };
 }
 
-function callChat(messages, maxTokens = 800) {
+function callChat(messages, maxTokens = 400) {
   return azureChat(
     [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     maxTokens
@@ -125,18 +126,10 @@ NOTA:
 ${content.slice(0, 4000)}
 """
 
+${TOPICS_INSTRUCTION}
+
 Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título representativo (máx 60 caracteres)",
-  "summary": "resumen en 2-3 frases",
-  "tags": ["tag1", "tag2", ...],
-  "topics": ["tema1", "tema2"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado (ej: perro, cocina, trabajo)",
-  "language": "es|en|...",
-  "keyPoints": ["punto1", "punto2", ...],
-  "sentiment": "positivo|negativo|neutro",
-  "category": "categoría amplia"
-}`;
+${JSON_SCHEMA}`;
 
   const result = await callChat([{ role: "user", content: prompt }]);
   return withTimestamp(result);
@@ -151,23 +144,15 @@ export async function enrichLink(url, existingPreview = {}) {
     ? `Metadatos Open Graph ya extraídos:\n- Título: ${existingPreview.title ?? "N/A"}\n- Descripción: ${existingPreview.description ?? "N/A"}`
     : "No hay metadatos previos disponibles.";
 
-  const prompt = `Analiza el siguiente enlace y sus metadatos disponibles para clasificarlo y enriquecerlo.
+  const prompt = `Analiza el siguiente enlace y sus metadatos disponibles para clasificarlo.
 
 URL: ${url}
 ${previewContext}
 
+${TOPICS_INSTRUCTION}
+
 Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título representativo",
-  "summary": "resumen del recurso en 2-3 frases",
-  "tags": ["tag1", "tag2", ...],
-  "topics": ["tema1", "tema2"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado",
-  "language": "es|en|...",
-  "keyPoints": ["punto clave 1", "punto clave 2"],
-  "category": "categoría amplia (tecnología, noticias, tutorial, etc.)",
-  "resourceType": "artículo|vídeo|podcast|repositorio|herramienta|foro|otro"
-}`;
+${JSON_SCHEMA}`;
 
   const result = await callChat([{ role: "user", content: prompt }]);
   return withTimestamp(result);
@@ -206,20 +191,12 @@ CONTENIDO:
 ${text.slice(0, 6000)}
 """
 
-Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título del documento",
-  "summary": "resumen en 2-3 frases",
-  "tags": ["tag1", "tag2", ...],
-  "topics": ["tema1", "tema2"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado",
-  "language": "es|en|...",
-  "keyPoints": ["punto clave 1", "punto clave 2", ...],
-  "category": "categoría amplia",
-  "documentType": "informe|artículo|manual|presentación|código|otro"
-}`;
+${TOPICS_INSTRUCTION}
 
-  const result = await callChat([{ role: "user", content: prompt }], 1000);
+Devuelve un JSON con la siguiente estructura exacta:
+${JSON_SCHEMA}`;
+
+  const result = await callChat([{ role: "user", content: prompt }], 400);
   return withTimestamp(result);
 }
 
@@ -243,19 +220,10 @@ async function enrichImageWithVision(base64, mimeType, filename) {
               type: "text",
               text: `Analiza esta imagen (nombre de fichero: "${filename}") y extrae metadatos estructurados.
 
+${TOPICS_INSTRUCTION}
+
 Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título descriptivo de la imagen",
-  "summary": "descripción detallada en 2-3 frases",
-  "tags": ["tag1", "tag2"],
-  "topics": ["tema1", "tema2"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado",
-  "language": "es|en|...",
-  "keyPoints": ["elemento destacado 1", "elemento destacado 2"],
-  "category": "screenshot|fotografía|diagrama|infografía|otro",
-  "containsText": true,
-  "dominantColors": ["color1", "color2"]
-}`,
+${JSON_SCHEMA}`,
             },
             {
               type: "image_url",
@@ -266,7 +234,7 @@ Devuelve un JSON con la siguiente estructura exacta:
       ],
       response_format: { type: "json_object" },
       temperature: 0.1,
-      max_tokens: 800,
+      max_tokens: 400,
     }),
   });
 
@@ -292,19 +260,12 @@ async function enrichFileByMetadata(filename, type) {
 Nombre: "${filename}"
 Tipo: "${type}"
 
-Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título inferido del fichero",
-  "summary": "descripción breve basada en nombre y tipo",
-  "tags": ["tag1", "tag2"],
-  "topics": ["tema inferido"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado",
-  "language": "desconocido",
-  "keyPoints": [],
-  "category": "categoría inferida"
-}`;
+${TOPICS_INSTRUCTION}
 
-  const result = await callChat([{ role: "user", content: prompt }], 400);
+Devuelve un JSON con la siguiente estructura exacta:
+${JSON_SCHEMA}`;
+
+  const result = await callChat([{ role: "user", content: prompt }], 300);
   return withTimestamp(result);
 }
 
@@ -318,19 +279,12 @@ export async function enrichVideo(filename, type) {
 Nombre: "${filename}"
 Tipo: "${type}"
 
-Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título inferido del vídeo",
-  "summary": "descripción breve basada en nombre y tipo",
-  "tags": ["tag1", "tag2", ...],
-  "topics": ["tema inferido"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado",
-  "language": "desconocido",
-  "keyPoints": [],
-  "category": "vídeo|presentación|tutorial|grabación|otro"
-}`;
+${TOPICS_INSTRUCTION}
 
-  const result = await callChat([{ role: "user", content: prompt }], 500);
+Devuelve un JSON con la siguiente estructura exacta:
+${JSON_SCHEMA}`;
+
+  const result = await callChat([{ role: "user", content: prompt }], 300);
   return withTimestamp(result);
 }
 
@@ -377,7 +331,7 @@ export async function enrichAudio(filePath, type) {
   }
 
   if (!transcription || transcription.trim().length === 0) {
-    return withTimestamp({ transcription: "", summary: "Audio sin contenido audible detectado." });
+    return withTimestamp({ transcription: "", title: "Audio sin contenido audible", topics: [], language: "desconocido", category: "audio" });
   }
 
   const prompt = `Analiza la siguiente transcripción de un audio (tipo: ${type}) y extrae metadatos estructurados.
@@ -387,19 +341,11 @@ TRANSCRIPCIÓN:
 ${transcription.slice(0, 5000)}
 """
 
-Devuelve un JSON con la siguiente estructura exacta:
-{
-  "title": "título descriptivo del audio",
-  "summary": "resumen en 2-3 frases",
-  "tags": ["tag1", "tag2", ...],
-  "topics": ["tema1", "tema2"],
-  "topic": "una o dos palabras para agrupar con contenido relacionado",
-  "language": "es|en|...",
-  "keyPoints": ["punto clave 1", "punto clave 2"],
-  "sentiment": "positivo|negativo|neutro",
-  "category": "nota de voz|reunión|podcast|clase|otro"
-}`;
+${TOPICS_INSTRUCTION}
 
-  const analysis = await callChat([{ role: "user", content: prompt }], 800);
+Devuelve un JSON con la siguiente estructura exacta:
+${JSON_SCHEMA}`;
+
+  const analysis = await callChat([{ role: "user", content: prompt }], 400);
   return withTimestamp({ ...analysis, transcription });
 }

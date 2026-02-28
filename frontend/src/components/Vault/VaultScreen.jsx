@@ -41,8 +41,9 @@ const KIND_LABEL = {
 function SearchResultCard({ item, onSelect }) {
   const [imgError, setImgError] = useState(false);
   const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
-  const displayName = item.filename ?? item.title ?? "Sin nombre";
+  const displayName = item.aiTitle ?? item.filename ?? item.title ?? "Sin nombre";
   const showThumbnail = (item.thumbnailUrl || item.kind === "photo") && !imgError;
+  const topics = Array.isArray(item.aiTopics) ? item.aiTopics : [];
 
   return (
     <li>
@@ -68,10 +69,20 @@ function SearchResultCard({ item, onSelect }) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
-          {item.topic && (
-            <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full w-max mt-1 inline-block dark:bg-blue-500/20 dark:text-blue-300">
-              {item.topic}
-            </span>
+          {item.aiCategory && (
+            <p className="text-zinc-500 dark:text-zinc-400 text-xs truncate mt-0.5">{item.aiCategory}</p>
+          )}
+          {topics.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {topics.slice(0, 3).map((t) => (
+                <span
+                  key={t}
+                  className="text-[10px] text-blue-500 dark:text-blue-400 bg-blue-500/10 dark:bg-blue-500/20 px-2 py-0.5 rounded-full"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
           )}
         </div>
         <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
@@ -417,7 +428,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-              placeholder="Buscar en el baúl (por nombre o tema)..."
+              placeholder="Buscar por título, tema o categoría…"
               className="flex-1 min-w-0 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
               aria-label="Buscar"
             />

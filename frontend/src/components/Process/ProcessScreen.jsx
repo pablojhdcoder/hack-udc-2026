@@ -51,18 +51,16 @@ function getAISummary(item) {
   return null;
 }
 
-/** Topics/tags del ítem para las píldoras (#topic). */
+/** Topics del ítem para las píldoras (#topic). Lee del nuevo formato aiEnrichment. */
 function getItemTopics(item) {
-  const list = [];
-  if (item?.topic && String(item.topic).trim()) list.push(String(item.topic).trim());
-  if (item?.aiEnrichment) {
-    try {
-      const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
-      const tags = data?.tags;
-      if (Array.isArray(tags)) tags.forEach((t) => t && list.push(String(t).trim()));
-    } catch {}
-  }
-  return [...new Set(list)];
+  if (!item?.aiEnrichment) return [];
+  try {
+    const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
+    if (Array.isArray(data?.topics)) {
+      return [...new Set(data.topics.filter(Boolean).map((t) => String(t).trim()))];
+    }
+  } catch {}
+  return [];
 }
 
 const DEFAULT_NOTE_BODY = "Breve resumen generado por IA sobre el contenido capturado...";

@@ -26,37 +26,37 @@ function resolveFilePath(relativePath) {
 
 /**
  * Asegura que el ítem tenga aiEnrichment antes de generar Markdown.
- * Si falta o solo tiene error, ejecuta el enriquecimiento y actualiza la BD.
+ * Si falta o solo tiene error (ej. 500 de Azure), ejecuta el enriquecimiento y actualiza la BD.
  */
 async function ensureEnrichment(kind, id, entity) {
-  console.log(`[ensureEnrichment] Verificando ${kind} ${id}`);
-  console.log(`[ensureEnrichment] entity.aiEnrichment:`, entity.aiEnrichment);
-  
-  const hasValidEnrichment =
-    entity.aiEnrichment &&
-    (entity.aiEnrichment.title || entity.aiEnrichment.summary) &&
-    !entity.aiEnrichment.error;
+  const raw = entity.aiEnrichment;
+  const ai = typeof raw === "string" ? (() => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } })() : raw;
 
-  console.log(`[ensureEnrichment] hasValidEnrichment: ${hasValidEnrichment}`);
-  
-  if (hasValidEnrichment) {
-    console.log(`[ensureEnrichment] Ya tiene enriquecimiento válido, saltando IA`);
+  const hasValidEnrichment =
+    ai &&
+    ai.title &&
+    !ai.error;
+
+  if (ai?.error) {
+    console.log(`[ensureEnrichment] ${kind} ${id}: enriquecimiento previo falló (${ai.error}), reintentando con IA...`);
+  } else if (hasValidEnrichment) {
+    console.log(`[ensureEnrichment] ${kind} ${id}: ya tiene enriquecimiento válido, saltando IA`);
     return entity;
+  } else if (raw && !hasValidEnrichment) {
+    console.log(`[ensureEnrichment] ${kind} ${id}: sin title/summary, enriqueciendo con IA...`);
+  } else if (!ai) {
+    console.log(`[ensureEnrichment] ${kind} ${id}: enriqueciendo con IA (primera vez)...`);
   }
-  
+
   if (!isAIEnabled()) {
     console.warn("[Process] AI no configurada: no se puede enriquecer", kind, id);
     return entity;
   }
 
   const enrichmentPayload = (enrichment) => {
-    const { topic, ...enrichmentOnly } = enrichment;
-    const data = { aiEnrichment: JSON.stringify(enrichmentOnly) };
-    if (topic != null && String(topic).trim()) data.topic = String(topic).trim().slice(0, 120);
-    return data;
+    return { aiEnrichment: JSON.stringify(enrichment) };
   };
 
-  console.log(`[ensureEnrichment] Llamando a enriquecer con IA...`);
   let enrichment;
   try {
     switch (kind) {

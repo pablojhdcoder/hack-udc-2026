@@ -12,9 +12,8 @@ model Link {
   url            String
   type           String   // youtube, twitch, telegram, article, generic
   title          String?
-  topic          String?
   metadata       String?  // JSON: preview, channel, etc.
-  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
+  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending") // pending | processing | processed | error
   processedPath  String?
@@ -26,8 +25,7 @@ model File {
   type           String   // pdf, word, image, ...
   filename       String
   size           Int?
-  topic          String?
-  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints, extractedText)
+  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -39,8 +37,7 @@ model Photo {
   type           String   // jpeg, png, webp, gif, ...
   filename       String
   size           Int?
-  topic          String?
-  aiEnrichment   String?  // JSON: AI-generated metadata (vision)
+  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -52,8 +49,7 @@ model Audio {
   type           String   // voice_note, podcast, ...
   duration       Int?     // segundos
   transcription  String?
-  topic          String?
-  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
+  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -63,8 +59,7 @@ model Note {
   id             String   @id @default(cuid())
   content        String
   type           String   // note, code, task, idea
-  topic          String?
-  aiEnrichment   String?  // JSON: AI-generated metadata (title, summary, tags, topics, keyPoints)
+  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -76,8 +71,7 @@ model Video {
   type           String   // mp4, webm, youtube_downloaded, ...
   duration       Int?     // segundos
   title          String?
-  topic          String?
-  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
+  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -100,7 +94,6 @@ model Favorite {
   duration       Int?
   transcription  String?
   metadata       String?  // JSON
-  topic          String?
   aiEnrichment   String?
   inboxStatus    String?
   processedPath  String?
