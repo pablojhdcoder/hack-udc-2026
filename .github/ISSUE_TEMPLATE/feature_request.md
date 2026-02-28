@@ -1,20 +1,23 @@
 ---
-name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+name: "✨ Feature request"
+about: Propone una nueva funcionalidad para el proyecto
+title: '[Feat] '
+labels: enhancement
 assignees: ''
-
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+## Resumen
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+Descripción breve y clara de la funcionalidad que propones.
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+## Solución propuesta
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+Descripción de lo que te gustaría que ocurriera. Puedes incluir ejemplos de uso, mockups o flujos.
+
+## Área del proyecto
+
+Describe qué parte del proyecto se vería afectada por esta funcionalidad (backend, frontend, integración IA, etc.).
+
+## Contexto adicional
+
+<!-- Capturas, enlaces, referencias o cualquier información adicional -->

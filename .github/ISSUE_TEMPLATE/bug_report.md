@@ -1,38 +1,52 @@
 ---
-name: Bug report
-about: Create a report to help us improve
-title: ''
-labels: ''
+name: "🐛 Bug report"
+about: Reporta un error para ayudarnos a mejorarlo
+title: '[Bug] '
+labels: bug
 assignees: ''
-
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## Descripción del problema
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+Descripción clara y concisa del error.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## Pasos para reproducirlo
 
-**Screenshots**
-If applicable, add screenshots to help explain your problem.
+1. Ir a '...'
+2. Hacer clic en '...'
+3. Ver el error
 
-**Desktop (please complete the following information):**
- - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
- - Version [e.g. 22]
+## Comportamiento esperado
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
+¿Qué debería haber ocurrido?
 
-**Additional context**
-Add any other context about the problem here.
+## Comportamiento actual
+
+¿Qué ocurre en realidad?
+
+## Logs relevantes
+
+<!-- Pega aquí los mensajes de error del backend (terminal) o del navegador (consola DevTools) -->
+
+```
+```
+
+## Capturas de pantalla
+
+<!-- Si aplica, añade capturas que ayuden a entender el problema -->
+
+## Entorno
+
+- **OS:** <!-- ej. Ubuntu 24.04, macOS 15, Windows 11 -->
+- **Node.js:** <!-- resultado de `node -v` -->
+- **Navegador:** <!-- ej. Chrome 122, Firefox 124 -->
+- **¿Tienes Azure OpenAI configurado?** <!-- Sí / No -->
+- **Endpoint Azure:** <!-- `.openai.azure.com` o `services.ai.azure.com` (AI Foundry) -->
+
+## Área afectada
+
+Describe qué parte del proyecto se ve afectada por el error (backend, frontend, integración IA, etc.).
+
+## Contexto adicional
+
+<!-- Cualquier otra información útil -->
