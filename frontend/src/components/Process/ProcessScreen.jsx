@@ -85,6 +85,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   const [processError, setProcessError] = useState(null);
   const [successInfo, setSuccessInfo] = useState(null);
 
+
   const loadInbox = useCallback(async () => {
     setLoading(true);
     try {
