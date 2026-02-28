@@ -77,7 +77,7 @@ export default function FooterCapture({
   };
 
   return (
-    <footer className="sticky bottom-0 bg-zinc-900/95 backdrop-blur-md border-t border-zinc-800 safe-bottom">
+    <footer className="shrink-0 bg-white border-t border-zinc-200 safe-bottom dark:bg-zinc-900 dark:border-zinc-800">
       <input
         ref={fileInputRef}
         type="file"
@@ -115,7 +115,7 @@ export default function FooterCapture({
           <button
             type="button"
             onClick={handleAttachClick}
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
             aria-label="Adjuntar archivo"
             aria-expanded={attachMenuOpen}
           >
@@ -124,14 +124,14 @@ export default function FooterCapture({
           <button
             type="button"
             onClick={handleCameraClick}
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
             aria-label="Tomar foto"
           >
             <Camera className="w-5 h-5" />
           </button>
           <button
             type="button"
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-800 text-zinc-400 transition-colors"
+            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
             aria-label="Micrófono"
           >
             <Mic className="w-5 h-5" />
@@ -143,13 +143,13 @@ export default function FooterCapture({
                 onClick={() => setAttachMenuOpen(false)}
                 aria-hidden
               />
-              <div className="absolute bottom-full left-0 mb-2 z-20 min-w-[180px] py-1 rounded-xl bg-zinc-800 border border-zinc-700 shadow-xl">
+              <div className="absolute bottom-full left-0 mb-2 z-20 min-w-[180px] py-1 rounded-xl bg-white border border-zinc-200 shadow-xl dark:bg-zinc-800 dark:border-zinc-700">
                 <button
                   type="button"
                   onClick={handleSubirArchivo}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-zinc-700 text-zinc-200 text-left text-sm"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-left text-sm"
                 >
-                  <FileUp className="w-4 h-4 text-zinc-400" />
+                  <FileUp className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
                   Subir archivo
                 </button>
               </div>
@@ -157,11 +157,11 @@ export default function FooterCapture({
           )}
         </div>
 
-        <div className="flex-1 flex items-center rounded-3xl bg-zinc-800 border border-zinc-700/50 pl-4 pr-2 py-2 min-h-[44px]">
+        <div className="flex-1 flex items-center rounded-3xl bg-zinc-100 border border-zinc-200 pl-4 pr-2 py-2 min-h-[44px] dark:bg-zinc-800 dark:border-zinc-700/50">
           <input
             type="text"
             placeholder="Escribe o pega un enlace..."
-            className="flex-1 bg-transparent text-zinc-100 placeholder-zinc-500 text-[15px] outline-none min-w-0"
+            className="flex-1 bg-transparent text-zinc-900 placeholder-zinc-500 text-[15px] outline-none min-w-0 dark:text-zinc-100 dark:placeholder-zinc-500"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}

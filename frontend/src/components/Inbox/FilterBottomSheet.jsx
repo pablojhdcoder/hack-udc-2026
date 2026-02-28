@@ -2,10 +2,11 @@ import { X, Calendar } from "lucide-react";
 
 const TYPE_OPTIONS = [
   { id: "all", label: "Todas" },
-  { id: "text", label: "Solo texto" },
-  { id: "links", label: "Solo enlaces" },
-  { id: "voice", label: "Solo notas de voz" },
-  { id: "files", label: "Solo archivos" },
+  { id: "text", label: "Texto" },
+  { id: "links", label: "Enlaces" },
+  { id: "voice", label: "Audio" },
+  { id: "files", label: "Ficheros" },
+  { id: "video", label: "Video" },
 ];
 
 const DATE_OPTIONS = [
@@ -37,19 +38,19 @@ export default function FilterBottomSheet({
         aria-label="Cerrar"
       />
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom max-h-[85vh] overflow-y-auto"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-zinc-200 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom max-h-[85vh] overflow-y-auto dark:bg-zinc-900 dark:border-zinc-800"
         aria-modal="true"
         aria-label="Opciones de filtro"
       >
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 sticky top-0 bg-zinc-900">
-          <h2 className="text-lg font-semibold text-zinc-100">Filtros</h2>
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 sticky top-0 bg-white dark:bg-zinc-900">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Filtros</h2>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-zinc-800"
+            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
             aria-label="Cerrar"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
           </button>
         </div>
 
@@ -68,8 +69,8 @@ export default function FilterBottomSheet({
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
                       activeTypeFilter === opt.id
-                        ? "bg-brand-500/20 text-brand-400"
-                        : "hover:bg-zinc-800 text-zinc-200"
+                        ? "bg-brand-500/20 text-brand-600 dark:text-brand-400"
+                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
                     }`}
                   >
                     {opt.label}
@@ -94,8 +95,8 @@ export default function FilterBottomSheet({
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors ${
                       activeDateFilter === opt.id
-                        ? "bg-brand-500/20 text-brand-400"
-                        : "hover:bg-zinc-800 text-zinc-200"
+                        ? "bg-brand-500/20 text-brand-600 dark:text-brand-400"
+                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
                     }`}
                   >
                     {opt.label}
