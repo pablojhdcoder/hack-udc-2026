@@ -18,7 +18,8 @@ const ICON_STYLE_BY_KIND = {
 function buildUploadThumbUrl(filePath) {
   if (!filePath || typeof filePath !== "string") return null;
   const normalized = String(filePath).trim().replace(/\\/g, "/");
-  return normalized ? `/api/uploads/${normalized}` : null;
+  const basename = normalized.split("/").pop();
+  return basename ? `/api/uploads/${basename}` : null;
 }
 
 function PlayOverlay() {

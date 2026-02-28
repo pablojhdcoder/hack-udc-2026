@@ -52,12 +52,7 @@ function VaultListItem({ item, onSelect, searchTokens }) {
     item.title ??
     item.url?.slice(0, 40) ??
     (item.content?.slice(0, 50) || "Sin título");
-  const statusLabel =
-    item.kind === "favorite"
-      ? (item.sourceKind ? KIND_LABEL[item.sourceKind] || item.sourceKind : "")
-      : (item.inboxStatus === "processed" ? (item.processedPath || "Procesado") : "Pendiente");
-  const typeLabel = item.type ? ` · ${item.type}` : "";
-  const subtitle = item.processedPath || `${statusLabel}${typeLabel} · ${formatDate(item.createdAt)}`;
+  const formattedDate = formatDate(item.createdAt);
 
   // Cuando hay búsqueda activa, determinar qué tags/topic coinciden
   const hasSearch = searchTokens && searchTokens.length > 0;
@@ -82,16 +77,16 @@ function VaultListItem({ item, onSelect, searchTokens }) {
         <FilePreview item={item} />
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <div className="flex flex-wrap items-center mt-1 gap-x-2 gap-y-1">
             {item.topic && (
               <span
-                className={`text-xs px-2 py-0.5 rounded-md ${
+                className={`inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full mr-2 ${
                   topicMatches
                     ? "text-emerald-300 bg-emerald-950/60 ring-1 ring-emerald-500/40"
-                    : "text-blue-400 bg-blue-950/50"
+                    : "text-blue-400 bg-blue-500/10 dark:bg-blue-500/20"
                 }`}
               >
-                #{item.topic}
+                #{String(item.topic).trim().toLowerCase()}
               </span>
             )}
             {matchingTags.map((tag) => (
@@ -107,7 +102,9 @@ function VaultListItem({ item, onSelect, searchTokens }) {
                 {item.aiCategory}
               </span>
             )}
-            <span className="text-zinc-500 dark:text-zinc-400 text-xs truncate">{subtitle}</span>
+            {formattedDate && (
+              <span className="text-xs text-neutral-500 dark:text-zinc-400">{item.topic ? "• " : ""}{formattedDate}</span>
+            )}
           </div>
           {hasSearch && scorePercent > 0 && (
             <div className="mt-1.5 flex items-center gap-2">

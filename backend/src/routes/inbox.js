@@ -450,7 +450,7 @@ router.get("/novelties", async (req, res) => {
           orderBy: { createdAt: "desc" },
           take: perKind,
         });
-        const toUploadUrl = (fp) => (fp ? `/api/uploads/${(fp + "").replace(/\\/g, "/")}` : null);
+        const toUploadUrl = (fp) => (fp ? `/api/uploads/${path.basename(String(fp).replace(/\\/g, "/"))}` : null);
         return items.map((item) => {
           const base = {
             kind: k,
@@ -653,15 +653,15 @@ router.get("/by-kind/:kind", async (req, res) => {
         processedPath: item.processedPath,
         createdAt: item.createdAt,
       };
+      const uploadThumbUrl = (fp) => (fp ? `/api/uploads/${path.basename(String(fp).replace(/\\/g, "/"))}` : null);
       if (kind === "file") {
         const filePath = item.filePath;
-        const normalized = filePath ? (filePath + "").replace(/\\/g, "/") : "";
-        const thumbnailUrl = normalized && (item.type === "image" || item.type === "photo") ? `/api/uploads/${normalized}` : null;
+        const thumbnailUrl = (item.type === "image" || item.type === "photo") ? uploadThumbUrl(filePath) : null;
         return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
       }
       if (kind === "photo") {
         const filePath = item.filePath;
-        const thumbnailUrl = filePath ? `/api/uploads/${(filePath + "").replace(/\\/g, "/")}` : null;
+        const thumbnailUrl = uploadThumbUrl(filePath);
         return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
       }
       if (kind === "link") return { ...base, url: item.url, type: item.type };
