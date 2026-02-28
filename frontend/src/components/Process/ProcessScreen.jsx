@@ -13,7 +13,7 @@ import {
   Folder,
   Save,
 } from "lucide-react";
-import { getInbox } from "../../api/client";
+import { getInbox, processItems } from "../../api/client";
 
 const ICON_BY_KIND = {
   link: Link2,
@@ -79,9 +79,26 @@ export default function ProcessScreen({ onBack }) {
     else onBack();
   };
 
-  const handleAprobar = () => {
-    if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
-    else onBack();
+  const handleAprobar = async () => {
+    if (!currentItem) return;
+    
+    console.log(`[ProcessScreen] Procesando item:`, currentItem);
+    
+    try {
+      // Procesar el item actual
+      await processItems(
+        [{ kind: currentItem.kind, id: currentItem.id }],
+        suggestedFolder
+      );
+      console.log(`[ProcessScreen] Item procesado exitosamente`);
+      
+      // Avanzar al siguiente o volver
+      if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
+      else onBack();
+    } catch (error) {
+      console.error(`[ProcessScreen] Error procesando:`, error);
+      alert(`Error al procesar: ${error.message}`);
+    }
   };
 
   if (loading) {
