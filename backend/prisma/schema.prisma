@@ -69,3 +69,28 @@ model Video {
   inboxStatus    String   @default("pending")
   processedPath  String?
 }
+
+// Referencia a cualquier ítem guardado como favorito (copia de campos para listar sin unir tablas).
+model Favorite {
+  id             String   @id @default(cuid())
+  kind           String   // note | link | file | audio | video
+  sourceId       String   // id del ítem original
+  createdAt      DateTime @default(now()) // cuándo se añadió a favoritos
+  // Campos opcionales copiados del origen (para mostrar en carpeta Favoritos)
+  title          String?
+  content        String?
+  url            String?
+  filename       String?
+  filePath       String?
+  type           String?
+  size           Int?
+  duration       Int?
+  transcription  String?
+  metadata       String?  // JSON
+  topic          String?
+  aiEnrichment   String?
+  inboxStatus    String?
+  processedPath  String?
+
+  @@unique([kind, sourceId])
+}

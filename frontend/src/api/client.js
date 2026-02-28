@@ -137,36 +137,22 @@ export async function discardItem(kind, id) {
 
 /**
  * Carpetas (tipos) con conteo desde la BD: Notas, Enlaces, Archivos, Audio, Video.
+ * Siempre usa la API real para reflejar lo que hay en la base de datos.
  * @returns {{ folders: Array<{ kind: string, name: string, count: number }> }}
  */
 export async function getVaultFolders() {
-  if (USE_MOCK) {
-    const counts = { note: 0, link: 0, file: 0, audio: 0, video: 0 };
-    mockItems.forEach((item) => {
-      if (counts[item.kind] != null) counts[item.kind]++;
-    });
-    return {
-      folders: [
-        { kind: "note", name: "Notas", count: counts.note },
-        { kind: "link", name: "Enlaces", count: counts.link },
-        { kind: "file", name: "Archivos", count: counts.file },
-        { kind: "audio", name: "Audio", count: counts.audio },
-        { kind: "video", name: "Video", count: counts.video },
-      ],
-    };
-  }
   const res = await fetch(`${API_BASE}/inbox/folders`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 /**
- * Últimos ítems procesados (para Tu Cerebro / Notas recientes).
+ * Últimos ítems procesados (para Tu Cerebro / recientes).
+ * Siempre usa la API real para reflejar la base de datos.
  * @param {number} limit
  * @returns {Promise<Array<{ kind, id, title, processedPath, createdAt }>>}
  */
 export async function getProcessedRecent(limit = 20) {
-  if (USE_MOCK) return Promise.resolve([]);
   const res = await fetch(`${API_BASE}/inbox/processed/recent?limit=${limit}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -174,52 +160,58 @@ export async function getProcessedRecent(limit = 20) {
 
 /**
  * Todos los ítems de un tipo (note, link, file, audio, video) — pending y processed.
- * Para mostrar en Tu Cerebro al pulsar una carpeta.
+ * Para kind "favorite" usar getFavorites().
  * @param {string} kind
- * @returns {Promise<Array<{ kind, id, title, inboxStatus, processedPath, createdAt }>>}
+ * @returns {Promise<Array<{ kind, id, title, filename?, url?, content?, type, inboxStatus, processedPath, createdAt }>>}
  */
 export async function getInboxByKind(kind) {
-  if (USE_MOCK) {
-    const list = mockItems.filter((item) => item.kind === kind);
-    return list.map((item) => ({
-      kind: item.kind,
-      id: item.id,
-      title: item.content?.slice(0, 50) || item.title || item.filename || "Nota de voz" || "Ítem",
-      inboxStatus: "pending",
-      processedPath: null,
-      createdAt: item.createdAt,
-    }));
-  }
   const res = await fetch(`${API_BASE}/inbox/by-kind/${kind}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
-/** Carpetas de conocimiento (destino al procesar). Misma lista que en Procesar. */
-export const KNOWLEDGE_FOLDERS = [
-  "estudio/SI",
-  "proyectos/HackUDC",
-  "referencias/React",
-  "inbox",
-];
-
 /**
- * Contenido de una carpeta de knowledge (subcarpetas y ficheros .md).
- * @param {string} path - ruta relativa, ej. "estudio/SI"
- * @returns {Promise<{ path: string, folders: string[], files: string[] }>}
+ * Lista de favoritos (carpeta Favoritos).
+ * @returns {Promise<Array<{ kind: "favorite", id, sourceKind, sourceId, title, filename?, url?, type, createdAt }>>}
  */
-export async function getKnowledgeFolder(path) {
-  const res = await fetch(`${API_BASE}/knowledge?path=${encodeURIComponent(path || ".")}`);
+export async function getFavorites() {
+  const res = await fetch(`${API_BASE}/inbox/favorites`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 /**
- * Contenido de un fichero .md en knowledge (para el visor).
- * @param {string} path - ruta relativa, ej. "estudio/SI/nota-1.md"
+ * Comprueba si un ítem está en favoritos.
+ * @param {string} kind - note | link | file | audio | video
+ * @param {string} id - id del ítem
+ * @returns {Promise<{ favorited: boolean, favoriteId: string|null }>}
  */
-export async function getKnowledgeFile(path) {
-  const res = await fetch(`${API_BASE}/knowledge/${path}`);
+export async function checkFavorite(kind, id) {
+  const res = await fetch(`${API_BASE}/inbox/favorites/check?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(await res.text());
-  return res.text();
+  return res.json();
 }
+
+/**
+ * Añade un ítem a favoritos (por kind e id del ítem original).
+ */
+export async function addToFavorites(kind, id) {
+  const res = await fetch(`${API_BASE}/inbox/favorites`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, id }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
+ * Quita un ítem de favoritos (por id del registro Favorite).
+ * @param {string} favoriteId - id del favorito (no del ítem original)
+ */
+export async function removeFromFavorites(favoriteId) {
+  const res = await fetch(`${API_BASE}/inbox/favorites/${favoriteId}`, { method: "DELETE" });
+  if (res.status === 404) return;
+  if (!res.ok) throw new Error(await res.text());
+}
+

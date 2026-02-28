@@ -269,12 +269,13 @@ router.post("/", optionalMulter, async (req, res) => {
 
 router.get("/folders", async (req, res) => {
   try {
-    const [notesCount, linksCount, filesCount, audiosCount, videosCount] = await Promise.all([
+    const [notesCount, linksCount, filesCount, audiosCount, videosCount, favoritesCount] = await Promise.all([
       prisma.note.count(),
       prisma.link.count(),
       prisma.file.count(),
       prisma.audio.count(),
       prisma.video.count(),
+      prisma.favorite.count(),
     ]);
     const folders = [
       { kind: "note", name: "Notas", count: notesCount },
@@ -282,6 +283,7 @@ router.get("/folders", async (req, res) => {
       { kind: "file", name: "Archivos", count: filesCount },
       { kind: "audio", name: "Audio", count: audiosCount },
       { kind: "video", name: "Video", count: videosCount },
+      { kind: "favorite", name: "Favoritos", count: favoritesCount },
     ];
     res.json({ folders });
   } catch (err) {
@@ -349,16 +351,127 @@ router.get("/by-kind/:kind", async (req, res) => {
 
   try {
     const items = await model.findMany({ orderBy: { createdAt: "desc" } });
-    const list = items.map((item) => ({
-      kind,
-      id: item.id,
-      title: toItemTitle(item, kind),
-      inboxStatus: item.inboxStatus,
-      processedPath: item.processedPath,
-      createdAt: item.createdAt,
-    }));
+    const list = items.map((item) => {
+      const base = {
+        kind,
+        id: item.id,
+        title: toItemTitle(item, kind),
+        inboxStatus: item.inboxStatus,
+        processedPath: item.processedPath,
+        createdAt: item.createdAt,
+      };
+      if (kind === "file") return { ...base, filename: item.filename, type: item.type };
+      if (kind === "link") return { ...base, url: item.url, type: item.type };
+      if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
+      if (kind === "audio") return { ...base, type: item.type };
+      if (kind === "video") return { ...base, type: item.type };
+      return base;
+    });
     res.json(list);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
+// Favoritos (rutas antes de /:kind/:id para que no coincidan)
+// ──────────────────────────────────────────────
+
+function copyToFavorite(item, kind) {
+  const title = toItemTitle(item, kind);
+  return {
+    kind,
+    sourceId: item.id,
+    title: title || null,
+    content: kind === "note" ? item.content : null,
+    url: kind === "link" ? item.url : null,
+    filename: kind === "file" ? item.filename : null,
+    filePath: item.filePath ?? null,
+    type: item.type ?? null,
+    size: item.size ?? null,
+    duration: item.duration ?? null,
+    transcription: item.transcription ?? null,
+    metadata: item.metadata ?? null,
+    topic: item.topic ?? null,
+    aiEnrichment: item.aiEnrichment ?? null,
+    inboxStatus: item.inboxStatus ?? null,
+    processedPath: item.processedPath ?? null,
+  };
+}
+
+router.get("/favorites", async (req, res) => {
+  try {
+    const list = await prisma.favorite.findMany({ orderBy: { createdAt: "desc" } });
+    res.json(
+      list.map((f) => ({
+        kind: "favorite",
+        id: f.id,
+        sourceKind: f.kind,
+        sourceId: f.sourceId,
+        title: f.title ?? f.filename ?? f.url?.slice(0, 40) ?? "Favorito",
+        filename: f.filename,
+        url: f.url,
+        content: f.content,
+        type: f.type,
+        inboxStatus: f.inboxStatus,
+        processedPath: f.processedPath,
+        createdAt: f.createdAt,
+      }))
+    );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get("/favorites/check", async (req, res) => {
+  const kind = req.query.kind;
+  const id = req.query.id;
+  if (!kind || !id) return res.status(400).json({ error: "Faltan kind e id" });
+  try {
+    const fav = await prisma.favorite.findUnique({ where: { kind_sourceId: { kind, sourceId: id } } });
+    res.json({ favorited: !!fav, favoriteId: fav?.id ?? null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post("/favorites", async (req, res) => {
+  const { kind, id: sourceId } = req.body;
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const model = modelMap[kind];
+  if (!model || !sourceId) return res.status(400).json({ error: "Se requiere kind e id del ítem" });
+
+  try {
+    const item = await model.findUnique({ where: { id: sourceId } });
+    if (!item) return res.status(404).json({ error: "Ítem no encontrado" });
+
+    const data = copyToFavorite(item, kind);
+    const fav = await prisma.favorite.upsert({
+      where: { kind_sourceId: { kind, sourceId } },
+      create: data,
+      update: data,
+    });
+    return res.status(201).json({
+      id: fav.id,
+      kind: "favorite",
+      sourceKind: fav.kind,
+      sourceId: fav.sourceId,
+      title: fav.title ?? fav.filename ?? fav.url?.slice(0, 40) ?? "Favorito",
+      createdAt: fav.createdAt,
+    });
+  } catch (err) {
+    if (err.code === "P2025") return res.status(404).json({ error: "Ítem no encontrado" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete("/favorites/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await prisma.favorite.delete({ where: { id } });
+    return res.status(204).send();
+  } catch (err) {
+    if (err.code === "P2025") return res.status(404).json({ error: "No encontrado" });
     res.status(500).json({ error: err.message });
   }
 });

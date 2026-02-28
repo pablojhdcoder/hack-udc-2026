@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, FileText, Link2, File, Mic, Video, Loader2, ChevronRight, FolderOpen, RefreshCw } from "lucide-react";
+import { ArrowLeft, FileText, Link2, File, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star } from "lucide-react";
 import {
   getVaultFolders,
   getProcessedRecent,
   getInboxByKind,
-  getKnowledgeFolder,
-  getKnowledgeFile,
-  KNOWLEDGE_FOLDERS,
+  getFavorites,
+  discardItem,
+  checkFavorite,
+  addToFavorites,
+  removeFromFavorites,
 } from "../../api/client";
 
 const ICON_BY_KIND = {
@@ -15,6 +17,7 @@ const ICON_BY_KIND = {
   file: File,
   audio: Mic,
   video: Video,
+  favorite: Star,
 };
 
 const KIND_LABEL = {
@@ -23,6 +26,7 @@ const KIND_LABEL = {
   file: "Archivos",
   audio: "Audio",
   video: "Video",
+  favorite: "Favoritos",
 };
 
 function formatDate(iso) {
@@ -37,55 +41,6 @@ function formatDate(iso) {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
-function basename(path) {
-  return path.split("/").pop() || path;
-}
-
-function MarkdownViewer({ content }) {
-  const lines = content.split("\n");
-  const elements = [];
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line.startsWith("### ")) {
-      elements.push(<h3 key={i} className="text-base font-semibold text-zinc-800 dark:text-zinc-200 mt-4 mb-1">{line.slice(4)}</h3>);
-    } else if (line.startsWith("## ")) {
-      elements.push(<h2 key={i} className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mt-5 mb-1">{line.slice(3)}</h2>);
-    } else if (line.startsWith("# ")) {
-      elements.push(<h1 key={i} className="text-xl font-bold text-zinc-900 dark:text-zinc-100 mt-2 mb-2">{line.slice(2)}</h1>);
-    } else if (line.startsWith("- ") || line.startsWith("* ")) {
-      elements.push(<li key={i} className="ml-4 text-zinc-700 dark:text-zinc-300 text-sm list-disc">{line.slice(2)}</li>);
-    } else if (line.startsWith("```")) {
-      const codeLines = [];
-      i++;
-      while (i < lines.length && !lines[i].startsWith("```")) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      elements.push(
-        <pre key={i} className="bg-zinc-100 dark:bg-zinc-800 rounded-lg p-3 text-xs text-zinc-700 dark:text-zinc-300 overflow-x-auto my-2 font-mono">
-          {codeLines.join("\n")}
-        </pre>
-      );
-    } else if (line.startsWith("**") && line.endsWith("**")) {
-      elements.push(<p key={i} className="font-semibold text-zinc-800 dark:text-zinc-200 text-sm">{line.slice(2, -2)}</p>);
-    } else if (line.trim() === "---" || line.trim() === "===") {
-      elements.push(<hr key={i} className="border-zinc-200 dark:border-zinc-700 my-3" />);
-    } else if (line.trim() === "") {
-      elements.push(<div key={i} className="h-2" />);
-    } else {
-      const parts = line.split(/(\*\*[^*]+\*\*)/g).map((part, j) =>
-        part.startsWith("**") && part.endsWith("**")
-          ? <strong key={j}>{part.slice(2, -2)}</strong>
-          : part
-      );
-      elements.push(<p key={i} className="text-zinc-700 dark:text-zinc-300 text-sm leading-relaxed">{parts}</p>);
-    }
-    i++;
-  }
-  return <div className="space-y-0.5">{elements}</div>;
-}
-
 export default function VaultScreen({ onBack }) {
   const [folders, setFolders] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -94,11 +49,12 @@ export default function VaultScreen({ onBack }) {
   const [selectedKind, setSelectedKind] = useState(null);
   const [itemsByKind, setItemsByKind] = useState([]);
   const [loadingKind, setLoadingKind] = useState(false);
-  const [knowledgePath, setKnowledgePath] = useState(null);
-  const [knowledgeData, setKnowledgeData] = useState(null);
-  const [loadingKnowledge, setLoadingKnowledge] = useState(false);
-  const [openFile, setOpenFile] = useState(null);
-  const [fileLoading, setFileLoading] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [favoriteCheck, setFavoriteCheck] = useState({ favorited: false, favoriteId: null });
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,7 +84,7 @@ export default function VaultScreen({ onBack }) {
     setLoadingKind(true);
     setError(null);
     try {
-      const list = await getInboxByKind(kind);
+      const list = kind === "favorite" ? await getFavorites() : await getInboxByKind(kind);
       setItemsByKind(Array.isArray(list) ? list : []);
     } catch (err) {
       setError(err?.message ?? "Error al cargar");
@@ -138,42 +94,106 @@ export default function VaultScreen({ onBack }) {
     }
   }, []);
 
-  const handleKnowledgeFolderClick = useCallback(async (path) => {
-    setKnowledgePath(path);
-    setOpenFile(null);
-    setLoadingKnowledge(true);
+  const handleBack = useCallback(() => onBack(), [onBack]);
+
+  const isFavoriteFolder = selectedKind === "favorite";
+  const isFavoriteItem = selectedItem?.kind === "favorite";
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!selectedItem || deleting) return;
+    setDeleting(true);
     setError(null);
     try {
-      const data = await getKnowledgeFolder(path);
-      setKnowledgeData(data);
+      if (isFavoriteItem || isFavoriteFolder) {
+        await removeFromFavorites(selectedItem.id);
+      } else {
+        await discardItem(selectedItem.kind, selectedItem.id);
+      }
+      setSelectedItem(null);
+      setShowDeleteConfirm(false);
+      setToastMessage("Eliminado correctamente");
+      setTimeout(() => setToastMessage(null), 2500);
+      await load();
+      if (selectedKind) {
+        const list = selectedKind === "favorite" ? await getFavorites() : await getInboxByKind(selectedKind);
+        setItemsByKind(Array.isArray(list) ? list : []);
+      }
     } catch (err) {
-      setError(err?.message ?? "Error al cargar");
-      setKnowledgeData(null);
+      setError(err?.message ?? "Error al eliminar");
     } finally {
-      setLoadingKnowledge(false);
+      setDeleting(false);
     }
+  }, [selectedItem, selectedKind, deleting, load, isFavoriteItem, isFavoriteFolder]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+    setSelectedItem(null);
   }, []);
 
-  const openMarkdown = useCallback(async (filePath) => {
-    setFileLoading(true);
-    setError(null);
-    try {
-      const content = await getKnowledgeFile(filePath);
-      setOpenFile({ path: filePath, content });
-    } catch (err) {
-      setError(err?.message ?? "Error al cargar el archivo");
-    } finally {
-      setFileLoading(false);
-    }
-  }, []);
+  useEffect(() => {
+    if (selectedItem) setShowDeleteConfirm(false);
+  }, [selectedItem]);
 
-  const handleBack = useCallback(() => {
-    if (openFile) {
-      setOpenFile(null);
+  useEffect(() => {
+    if (!selectedItem || selectedItem.kind === "favorite") {
+      setFavoriteCheck({ favorited: false, favoriteId: null });
       return;
     }
-    onBack();
-  }, [openFile, onBack]);
+    let cancelled = false;
+    checkFavorite(selectedItem.kind, selectedItem.id).then((r) => {
+      if (!cancelled) setFavoriteCheck({ favorited: r.favorited, favoriteId: r.favoriteId });
+    });
+    return () => { cancelled = true; };
+  }, [selectedItem]);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!selectedItem || selectedItem.kind === "favorite" || togglingFavorite) return;
+    setTogglingFavorite(true);
+    setError(null);
+    try {
+      if (favoriteCheck.favorited) {
+        await removeFromFavorites(favoriteCheck.favoriteId);
+        setFavoriteCheck({ favorited: false, favoriteId: null });
+        setToastMessage("Eliminado de favoritos");
+      } else {
+        const created = await addToFavorites(selectedItem.kind, selectedItem.id);
+        setFavoriteCheck({ favorited: true, favoriteId: created.id });
+        setToastMessage("Añadido a favoritos");
+      }
+      await load();
+      if (selectedKind === "favorite") {
+        const list = await getFavorites();
+        setItemsByKind(Array.isArray(list) ? list : []);
+      }
+      setSelectedItem(null);
+      setTimeout(() => setToastMessage(null), 2500);
+    } catch (err) {
+      setError(err?.message ?? "Error al actualizar favoritos");
+    } finally {
+      setTogglingFavorite(false);
+    }
+  }, [selectedItem, favoriteCheck, togglingFavorite, load, selectedKind]);
+
+  const handleQuitarDeFavoritos = useCallback(async () => {
+    if (!selectedItem || selectedItem.kind !== "favorite" || togglingFavorite) return;
+    setTogglingFavorite(true);
+    setError(null);
+    try {
+      await removeFromFavorites(selectedItem.id);
+      setToastMessage("Eliminado de favoritos");
+      setSelectedItem(null);
+      await load();
+      if (selectedKind === "favorite") {
+        const list = await getFavorites();
+        setItemsByKind(Array.isArray(list) ? list : []);
+      }
+      setTimeout(() => setToastMessage(null), 2500);
+    } catch (err) {
+      setError(err?.message ?? "Error al quitar de favoritos");
+    } finally {
+      setTogglingFavorite(false);
+    }
+  }, [selectedItem, togglingFavorite, load, selectedKind]);
 
   const selectedLabel = selectedKind ? (KIND_LABEL[selectedKind] || selectedKind) : null;
 
@@ -189,19 +209,16 @@ export default function VaultScreen({ onBack }) {
           <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
         </button>
         <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
-          {openFile ? basename(openFile.path).replace(/\.md$/, "") : "Tu Cerebro"}
+          Tu Cerebro
         </h1>
-        {!openFile && (
-          <button
-            type="button"
-            onClick={() => load()}
-            className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            aria-label="Recargar"
-          >
-            <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-          </button>
-        )}
-        {openFile && <div className="w-10" />}
+        <button
+          type="button"
+          onClick={() => load()}
+          className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          aria-label="Recargar"
+        >
+          <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+        </button>
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-5 space-y-6 scrollbar-hide">
@@ -211,11 +228,7 @@ export default function VaultScreen({ onBack }) {
           </div>
         )}
 
-        {openFile ? (
-          <div className="pb-6">
-            <MarkdownViewer content={openFile.content} />
-          </div>
-        ) : loading ? (
+        {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
             <p className="text-zinc-500 text-sm">Cargando carpetas…</p>
@@ -253,73 +266,6 @@ export default function VaultScreen({ onBack }) {
               </div>
             </section>
 
-            <section>
-              <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
-                Carpetas de conocimiento
-              </h2>
-              <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-2">
-                Aquí aparecen los ítems que proceses y guardes en cada carpeta. Pulsa en un archivo para leerlo.
-              </p>
-              <div className="grid grid-cols-1 gap-2">
-                {KNOWLEDGE_FOLDERS.map((path) => (
-                  <button
-                    key={path}
-                    type="button"
-                    onClick={() => handleKnowledgeFolderClick(path)}
-                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/80 dark:border-zinc-700/50 dark:hover:bg-zinc-800"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center">
-                        <FolderOpen className="w-5 h-5 text-brand-500 dark:text-zinc-300" />
-                      </div>
-                      <span className="text-zinc-900 dark:text-zinc-100 font-medium text-sm">{path}</span>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-zinc-400" />
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            {knowledgePath && knowledgeData && (
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider">
-                    {knowledgePath}
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => { setKnowledgePath(null); setKnowledgeData(null); }}
-                    className="text-brand-500 dark:text-brand-400 text-sm font-medium"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-                {knowledgeData.files?.length === 0 && !knowledgeData.folders?.length ? (
-                  <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">Aún no hay nada. Procesa ítems y elige esta carpeta como destino.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {(knowledgeData.files || []).map((filePath) => {
-                      const name = basename(filePath).replace(/\.md$/, "") || filePath;
-                      return (
-                        <li key={filePath}>
-                          <button
-                            type="button"
-                            onClick={() => openMarkdown(filePath)}
-                            disabled={fileLoading}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80 disabled:opacity-50"
-                          >
-                            <FileText className="w-5 h-5 text-brand-500 dark:text-zinc-400 flex-shrink-0" />
-                            <span className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate flex-1">{name}</span>
-                            <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            )}
-
             {selectedKind && (
               <section>
                 <div className="flex items-center justify-between mb-3">
@@ -343,22 +289,32 @@ export default function VaultScreen({ onBack }) {
                 ) : (
                   <ul className="space-y-2">
                     {itemsByKind.map((item) => {
-                      const Icon = ICON_BY_KIND[item.kind] ?? FileText;
+                      const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
+                      const displayName = item.filename ?? item.title ?? item.url?.slice(0, 40) ?? (item.content?.slice(0, 50) || "Sin título");
+                      const statusLabel = item.kind === "favorite"
+                        ? (item.sourceKind ? KIND_LABEL[item.sourceKind] || item.sourceKind : "")
+                        : (item.inboxStatus === "processed" ? (item.processedPath || "Procesado") : "Pendiente");
+                      const typeLabel = item.type ? ` · ${item.type}` : "";
                       return (
                         <li key={`${item.kind}-${item.id}`}>
-                          <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 dark:bg-zinc-800/60 dark:border-zinc-700/50">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedItem(item)}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+                          >
                             <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
                               <Icon className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">
-                                {item.title || "Sin título"}
+                                {displayName}
                               </p>
-                              <p className="text-zinc-500 dark:text-zinc-400 text-xs">
-                                {item.inboxStatus === "processed" ? item.processedPath : "Pendiente"} · {formatDate(item.createdAt)}
+                              <p className="text-zinc-500 dark:text-zinc-400 text-xs truncate">
+                                {statusLabel}{typeLabel} · {formatDate(item.createdAt)}
                               </p>
                             </div>
-                          </div>
+                            <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                          </button>
                         </li>
                       );
                     })}
@@ -379,7 +335,11 @@ export default function VaultScreen({ onBack }) {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
                     return (
                       <li key={`${item.kind}-${item.id}`}>
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 dark:bg-zinc-800/60 dark:border-zinc-700/50">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedItem(item)}
+                          className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+                        >
                           <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
                             <Icon className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
                           </div>
@@ -391,7 +351,8 @@ export default function VaultScreen({ onBack }) {
                               {item.processedPath || formatDate(item.createdAt)}
                             </p>
                           </div>
-                        </div>
+                          <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                        </button>
                       </li>
                     );
                   })}
@@ -401,6 +362,104 @@ export default function VaultScreen({ onBack }) {
           </>
         )}
       </main>
+
+      {toastMessage && (
+        <div className="fixed top-4 left-4 right-4 z-[60] flex justify-center pointer-events-none">
+          <div className="rounded-xl bg-emerald-600 text-white px-4 py-2.5 text-sm font-medium shadow-lg">
+            {toastMessage}
+          </div>
+        </div>
+      )}
+
+      {selectedItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          aria-modal="true"
+          role="dialog"
+          onClick={() => {
+            if (deleting || togglingFavorite) return;
+            if (showDeleteConfirm) handleCancelDelete();
+            else setSelectedItem(null);
+          }}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-zinc-900 p-4 pb-safe shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {showDeleteConfirm ? (
+              <>
+                <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
+                  ¿Seguro que quieres eliminarlo?
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCancelDelete}
+                    disabled={deleting}
+                    className="flex-1 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteConfirm}
+                    disabled={deleting}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aceptar"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
+                  {selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? "Ítem"}
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItem(null)}
+                    disabled={togglingFavorite}
+                    className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  {isFavoriteItem ? (
+                    <button
+                      type="button"
+                      onClick={handleQuitarDeFavoritos}
+                      disabled={togglingFavorite}
+                      className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
+                      Quitar de favoritos
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleToggleFavorite}
+                      disabled={togglingFavorite}
+                      className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin" /> : <Star className="w-4 h-4" />}
+                      {favoriteCheck.favorited ? "Quitar de favoritos" : "Añadir a favoritos"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={togglingFavorite}
+                    className="flex-1 min-w-[100px] py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Eliminar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
