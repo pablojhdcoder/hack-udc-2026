@@ -267,11 +267,6 @@ export default function SettingsScreen({ onBack, onHelpCenterClick, darkMode = t
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button type="button" onClick={() => setFreeSpaceModalOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Trash2} label={t("settings.freeSpace")}>
-              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
-            </SettingsRow>
-          </button>
         </SettingsGroup>
 
         <SettingsGroup title={t("settings.ai")}>
