@@ -9,10 +9,24 @@ const KNOWLEDGE_DIR = join(__dirname, "..", "..", "knowledge");
  * Escribe un fichero Markdown en knowledge/{destination}/
  */
 export function writeMarkdown(destination, filename, content) {
+  console.log(`[Markdown] KNOWLEDGE_DIR: ${KNOWLEDGE_DIR}`);
+  console.log(`[Markdown] destination: ${destination}`);
+  console.log(`[Markdown] filename: ${filename}`);
+  
   const dir = join(KNOWLEDGE_DIR, destination);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  console.log(`[Markdown] Directorio destino: ${dir}`);
+  
+  if (!existsSync(dir)) {
+    console.log(`[Markdown] Creando directorio: ${dir}`);
+    mkdirSync(dir, { recursive: true });
+  }
+  
   const fullPath = join(dir, filename);
+  console.log(`[Markdown] Ruta completa: ${fullPath}`);
+  
   writeFileSync(fullPath, content, "utf-8");
+  console.log(`[Markdown] ✅ Archivo escrito exitosamente`);
+  
   return join(destination, filename);
 }
 
