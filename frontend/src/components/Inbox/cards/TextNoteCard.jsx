@@ -13,12 +13,22 @@ function formatDate(iso) {
 export default function TextNoteCard({ item }) {
   return (
     <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-neutral-800/80 dark:border-neutral-700/50">
-      <div className="flex gap-3">
-        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-brand-500/10 flex items-center justify-center dark:bg-neutral-700/80">
-          <FileText className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
+      <div className="flex gap-3 items-center">
+        <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-emerald-400/10 flex items-center justify-center">
+          <FileText className="w-7 h-7 text-emerald-400" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm leading-snug line-clamp-3">{item.content}</p>
+          {(item.topic || item.aiEnrichment?.tags?.length) && (
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {item.topic && (
+                <span className="text-blue-400 bg-blue-950/50 px-2 py-0.5 rounded-md text-xs">#{item.topic}</span>
+              )}
+              {item.aiEnrichment?.tags?.map((tag) => (
+                <span key={tag} className="text-blue-400 bg-blue-950/50 px-2 py-0.5 rounded-md text-xs">#{tag}</span>
+              ))}
+            </div>
+          )}
           <p className="text-zinc-500 text-xs mt-2">{formatDate(item.createdAt)}</p>
         </div>
       </div>

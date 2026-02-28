@@ -450,6 +450,7 @@ router.get("/novelties", async (req, res) => {
           orderBy: { createdAt: "desc" },
           take: perKind,
         });
+        const toUploadUrl = (fp) => (fp ? `/api/uploads/${(fp + "").replace(/\\/g, "/")}` : null);
         return items.map((item) => {
           const base = {
             kind: k,
@@ -461,8 +462,18 @@ router.get("/novelties", async (req, res) => {
           };
           if (k === "link") return { ...base, url: item.url, type: item.type };
           if (k === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
-          if (k === "file" || k === "photo") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
-          if (k === "audio" || k === "video") return { ...base, type: item.type, filePath: item.filePath };
+          if (k === "file") {
+            const filePath = item.filePath;
+            const thumbnailUrl = (item.type === "image" || item.type === "photo") ? toUploadUrl(filePath) : null;
+            return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
+          }
+          if (k === "photo") {
+            const filePath = item.filePath;
+            const thumbnailUrl = toUploadUrl(filePath);
+            return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
+          }
+          if (k === "audio") return { ...base, type: item.type, filePath: item.filePath };
+          if (k === "video") return { ...base, type: item.type, filePath: item.filePath };
           return base;
         });
       })
@@ -642,8 +653,17 @@ router.get("/by-kind/:kind", async (req, res) => {
         processedPath: item.processedPath,
         createdAt: item.createdAt,
       };
-      if (kind === "file") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
-      if (kind === "photo") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
+      if (kind === "file") {
+        const filePath = item.filePath;
+        const normalized = filePath ? (filePath + "").replace(/\\/g, "/") : "";
+        const thumbnailUrl = normalized && (item.type === "image" || item.type === "photo") ? `/api/uploads/${normalized}` : null;
+        return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
+      }
+      if (kind === "photo") {
+        const filePath = item.filePath;
+        const thumbnailUrl = filePath ? `/api/uploads/${(filePath + "").replace(/\\/g, "/")}` : null;
+        return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
+      }
       if (kind === "link") return { ...base, url: item.url, type: item.type };
       if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
       if (kind === "audio") return { ...base, type: item.type, filePath: item.filePath };

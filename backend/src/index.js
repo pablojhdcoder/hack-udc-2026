@@ -1,13 +1,18 @@
-import http from "http";
-import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Cargar .env del backend para DATABASE_URL, PORT, etc.
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
+
+import http from "http";
+import express from "express";
 import cors from "cors";
 import inboxRoutes from "./routes/inbox.js";
 import processRoutes from "./routes/process.js";
 import searchRoutes from "./routes/search.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
 const app = express();
 const PORT = process.env.PORT ?? 3001;
