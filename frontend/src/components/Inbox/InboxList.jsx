@@ -1,11 +1,9 @@
 import InboxCard from "./InboxCard";
 import EmptyState from "./EmptyState";
 
-export default function InboxList({ items, searchQuery }) {
+export default function InboxList({ items, searchQuery = "" }) {
   if (items.length === 0) {
-    return (
-      <EmptyState isSearch={Boolean(searchQuery?.trim())} />
-    );
+    return <EmptyState isSearch={Boolean(searchQuery?.trim())} />;
   }
 
   return (
