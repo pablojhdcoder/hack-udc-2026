@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles } from "lucide-react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X } from "lucide-react";
 import {
   getVaultFolders,
   getProcessedRecent,
@@ -49,6 +49,18 @@ function formatDate(iso) {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
+function filterVaultItems(items, query) {
+  if (!query || !query.trim()) return items;
+  const q = query.trim().toLowerCase();
+  return items.filter((item) => {
+    const title = item.title ?? item.filename ?? "";
+    const content = item.content ?? "";
+    const url = item.url ?? "";
+    const path = item.processedPath ?? "";
+    return title.toLowerCase().includes(q) || content.toLowerCase().includes(q) || url.toLowerCase().includes(q) || path.toLowerCase().includes(q);
+  });
+}
+
 export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [folders, setFolders] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -67,6 +79,10 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [folderViewActive, setFolderViewActive] = useState(false);
   const [fullNoteContent, setFullNoteContent] = useState(null);
   const [loadingNote, setLoadingNote] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInputValue, setSearchInputValue] = useState("");
+  const searchInputRef = useRef(null);
   const lastOpenedKeyRef = useRef(null);
   const initialAppliedRef = useRef(false);
 
@@ -285,6 +301,25 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
 
   const selectedLabel = selectedKind ? (KIND_LABEL[selectedKind] || selectedKind) : null;
 
+  const filteredRecent = useMemo(() => filterVaultItems(recent, searchQuery), [recent, searchQuery]);
+  const filteredWeeklyWrapped = useMemo(() => filterVaultItems(weeklyWrapped, searchQuery), [weeklyWrapped, searchQuery]);
+  const filteredItemsByKind = useMemo(() => filterVaultItems(itemsByKind, searchQuery), [itemsByKind, searchQuery]);
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  const handleCloseSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchInputValue("");
+    setSearchQuery("");
+  }, []);
+
+  const handleBuscar = useCallback(() => {
+    setSearchQuery(searchInputValue.trim());
+    setSearchOpen(false);
+  }, [searchInputValue]);
+
   const openItemUrl = useCallback(() => {
     if (!selectedItem) return;
     const kind = selectedItem.kind === "favorite" ? selectedItem.sourceKind : selectedItem.kind;
@@ -316,7 +351,39 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
       <header className="shrink-0 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
-        {folderViewActive ? (
+        {searchOpen ? (
+          <div className="flex items-center gap-2 w-full">
+            <button
+              type="button"
+              onClick={handleCloseSearch}
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 shrink-0"
+              aria-label="Cerrar búsqueda"
+            >
+              <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
+            </button>
+            <input
+              ref={searchInputRef}
+              type="search"
+              value={searchInputValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSearchInputValue(v);
+                setSearchQuery(v.trim());
+              }}
+              onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
+              placeholder="Buscar en el baúl..."
+              className="flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
+              aria-label="Buscar"
+            />
+            <button
+              type="button"
+              onClick={handleBuscar}
+              className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium shrink-0"
+            >
+              Buscar
+            </button>
+          </div>
+        ) : folderViewActive ? (
           <>
             <button
               type="button"
@@ -335,22 +402,32 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
               {selectedLabel ?? "Carpeta"}
             </h1>
-            <button
-              type="button"
-              onClick={async () => {
-                setLoadingKind(true);
-                try {
-                  const list = await fetchFolderItems(selectedKind);
-                  setItemsByKind(Array.isArray(list) ? list : []);
-                } finally {
-                  setLoadingKind(false);
-                }
-              }}
-              className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              aria-label="Recargar"
-            >
-              <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-            </button>
+            <div className="flex items-center gap-0">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Buscar"
+              >
+                <Search className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setLoadingKind(true);
+                  try {
+                    const list = await fetchFolderItems(selectedKind);
+                    setItemsByKind(Array.isArray(list) ? list : []);
+                  } finally {
+                    setLoadingKind(false);
+                  }
+                }}
+                className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Recargar"
+              >
+                <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+              </button>
+            </div>
           </>
         ) : (
           <>
@@ -365,14 +442,24 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
               El baúl de las ideas
             </h1>
-            <button
-              type="button"
-              onClick={() => load()}
-              className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              aria-label="Recargar"
-            >
-              <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-            </button>
+            <div className="flex items-center gap-0">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Buscar"
+              >
+                <Search className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+              </button>
+              <button
+                type="button"
+                onClick={() => load()}
+                className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                aria-label="Recargar"
+              >
+                <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+              </button>
+            </div>
           </>
         )}
       </header>
@@ -390,11 +477,13 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
               <p className="text-zinc-500 text-sm">Cargando…</p>
             </div>
-          ) : itemsByKind.length === 0 ? (
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No hay ítems en esta carpeta.</p>
+          ) : filteredItemsByKind.length === 0 ? (
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">
+              {searchQuery.trim() ? "No hay resultados para la búsqueda." : "No hay ítems en esta carpeta."}
+            </p>
           ) : (
             <ul className="space-y-2">
-              {itemsByKind.map((item) => {
+              {filteredItemsByKind.map((item) => {
                 const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
                 const displayName = item.filename ?? item.title ?? item.url?.slice(0, 40) ?? (item.content?.slice(0, 50) || "Sin título");
                 const statusLabel = item.kind === "favorite"
@@ -459,7 +548,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               </div>
             </section>
 
-            {weeklyWrapped.length > 0 && (
+            {(weeklyWrapped.length > 0 || searchQuery.trim()) && (
               <section>
                 <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
                   Tus hits de la semana
@@ -467,8 +556,11 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-3">
                   Lo que más has abierto en los últimos 7 días
                 </p>
+                {filteredWeeklyWrapped.length === 0 ? (
+                  <p className="text-zinc-500 dark:text-zinc-400 text-sm py-2">No hay resultados para la búsqueda.</p>
+                ) : (
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide snap-x snap-mandatory">
-                  {weeklyWrapped.map((item, idx) => {
+                  {filteredWeeklyWrapped.map((item, idx) => {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
                     const displayName = item.filename ?? item.title ?? item.url?.slice(0, 30) ?? (item.content?.slice(0, 30) || "Sin título");
                     return (
@@ -492,6 +584,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     );
                   })}
                 </div>
+                )}
               </section>
             )}
 
@@ -499,11 +592,13 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
                 Procesados recientes
               </h2>
-              {recent.length === 0 ? (
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">Aún no hay ítems procesados.</p>
+              {filteredRecent.length === 0 ? (
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">
+                  {searchQuery.trim() ? "No hay resultados para la búsqueda." : "Aún no hay ítems procesados."}
+                </p>
               ) : (
                 <ul className="space-y-2">
-                  {recent.map((item) => {
+                  {filteredRecent.map((item) => {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
                     return (
                       <li key={`${item.kind}-${item.id}`}>

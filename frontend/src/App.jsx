@@ -43,23 +43,9 @@ function filterByDate(items, dateFilter) {
   });
 }
 
-function filterBySearch(items, query) {
-  if (!query.trim()) return items;
-  const q = query.trim().toLowerCase();
-  return items.filter((item) => {
-    if (item.content?.toLowerCase().includes(q)) return true;
-    if (item.title?.toLowerCase().includes(q)) return true;
-    if (item.url?.toLowerCase().includes(q)) return true;
-    if (item.filename?.toLowerCase().includes(q)) return true;
-    return false;
-  });
-}
-
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [currentView, setCurrentView] = useState("inbox");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(!USE_MOCK);
@@ -119,9 +105,8 @@ export default function App() {
 
   const filteredItems = useMemo(() => {
     const byKind = filterByKind(items, typeFilter);
-    const byDate = filterByDate(byKind, dateFilter);
-    return filterBySearch(byDate, searchQuery);
-  }, [items, typeFilter, dateFilter, searchQuery]);
+    return filterByDate(byKind, dateFilter);
+  }, [items, typeFilter, dateFilter]);
 
   const handleNavigate = useCallback((view) => {
     setCurrentView(view);
@@ -186,10 +171,6 @@ export default function App() {
         <Header
           onMenuClick={() => setSidebarOpen(true)}
           onFilterClick={() => setFilterSheetOpen(true)}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          isSearchOpen={searchOpen}
-          onSearchOpenChange={setSearchOpen}
         />
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-4 scrollbar-hide">
           {error && (
@@ -202,7 +183,7 @@ export default function App() {
               Cargando la fábrica de las ideas…
             </div>
           ) : (
-            <InboxList items={filteredItems} searchQuery={searchQuery} />
+            <InboxList items={filteredItems} />
           )}
         </main>
         <FooterCapture
