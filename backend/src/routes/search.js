@@ -15,11 +15,39 @@ function parseAI(raw) {
 }
 
 /**
+ * Comprueba si al menos un token coincide en campos permitidos (no en summary).
+ * Así excluimos ítems que solo coincidían por aiEnrichment.summary.
+ */
+function matchesAllowedFields(tokens, fields) {
+  if (!tokens.length) return true;
+  const lc = (s) => (s ?? "").toString().toLowerCase();
+  const ai = parseAI(fields.aiEnrichment);
+  const aiTitle = lc(ai?.title);
+  const aiTopics = (Array.isArray(ai?.topics) ? ai.topics : []).map((t) => lc(t));
+  const aiCat = lc(ai?.category);
+
+  for (const token of tokens) {
+    if (fields.content && lc(fields.content).includes(token)) return true;
+    if (fields.url && lc(fields.url).includes(token)) return true;
+    if (fields.title && lc(fields.title).includes(token)) return true;
+    if (fields.filename && lc(fields.filename).includes(token)) return true;
+    if (fields.filePath && lc(fields.filePath).includes(token)) return true;
+    if (fields.metadata && lc(fields.metadata).includes(token)) return true;
+    if (fields.transcription && lc(fields.transcription).includes(token)) return true;
+    // Título: coincidencia parcial en ambos sentidos (token en título o título en token)
+    if (aiTitle && (aiTitle.includes(token) || (aiTitle.length >= 2 && token.includes(aiTitle)))) return true;
+    if (aiTopics.some((t) => t === token || t.includes(token))) return true;
+    if (aiCat && aiCat.includes(token)) return true;
+  }
+  return false;
+}
+
+/**
  * Calcula la puntuación de relevancia de un item frente a los tokens de búsqueda.
  * Compara cada token contra: aiTitle, aiTags/aiTopics (mismo concepto), aiCategory, filename.
  *
  * Sistema de pesos:
- *   aiTitle       → exacto: 20 | parcial: 10
+ *   aiTitle       → exacto: 20 | parcial: 10 (token en título o título en token)
  *   aiTags/aiTopics → exacto: 15 | parcial: 8  (topics del enrichment, única fuente)
  *   aiCategory    → exacto: 10 | parcial:  5
  *   filename/url  → parcial:  3
@@ -44,9 +72,10 @@ function scoreItem(item, tokens) {
   for (const token of tokens) {
     let tokenScore = 0;
 
-    // --- aiTitle (prioridad máxima) ---
-    if (title === token)             { tokenScore += 20; matchedTokens.add(token); }
-    else if (title.includes(token))  { tokenScore += 10; matchedTokens.add(token); }
+    // --- aiTitle (prioridad máxima): exacto, o coincidencia parcial (token en título o título en token) ---
+    if (title === token) { tokenScore += 20; matchedTokens.add(token); }
+    else if (title.includes(token)) { tokenScore += 10; matchedTokens.add(token); }
+    else if (title.length >= 2 && token.includes(title)) { tokenScore += 10; matchedTokens.add(token); }
 
     // --- aiTags/aiTopics (topics del enrichment: prioridad alta 15/8) ---
     for (const tag of tags) {
@@ -73,22 +102,25 @@ function scoreItem(item, tokens) {
 
 /**
  * GET /api/search?q=...
- * Busca en todas las entidades del vault comparando la query (tokenizada) contra:
- *   title, topics (tags), category de la IA, además de filename/url/content.
- * Devuelve array ordenado de mayor a menor relevancia, con campo `score`.
+ * Búsqueda exhaustiva en el vault. Se usa: title, topics, category de la IA;
+ * content, url, title, filename, filePath, transcription, metadata.
+ * No se incluye summary en el criterio: se excluyen ítems que solo coincidían en summary.
+ * Devuelve array ordenado por relevancia (score).
  */
 router.get("/search", async (req, res) => {
   const raw = (req.query.q || "").trim().toLowerCase();
   if (!raw) return res.json([]);
 
-  // Tokenizar la query: divide por espacios y elimina duplicados
-  const tokens = [...new Set(raw.split(/\s+/).filter(Boolean))];
+  // Tokenizar: espacios, sin duplicados; si hay varias palabras, ignorar tokens de 1 carácter (ruido)
+  const rawTokens = [...new Set(raw.split(/\s+/).filter(Boolean))];
+  const tokens = rawTokens.length > 1
+    ? rawTokens.filter((t) => t.length >= 2)
+    : rawTokens;
+  const tokensToUse = tokens.length > 0 ? tokens : rawTokens;
 
-  // Para SQLite: buscar por subcadena en campos principales + JSON de aiEnrichment
+  // Para SQLite: buscar por subcadena en campos principales + JSON de aiEnrichment (sin summary en el criterio final)
   const aiFilter = { aiEnrichment: { contains: raw } };
-
-  // También filtramos por cada token individualmente en aiEnrichment para búsquedas multi-palabra
-  const aiTokenFilters = tokens.map((t) => ({ aiEnrichment: { contains: t } }));
+  const aiTokenFilters = rawTokens.map((t) => ({ aiEnrichment: { contains: t } }));
 
   try {
     const [notes, links, files, photos, audios, videos] = await Promise.all([
@@ -107,11 +139,13 @@ router.get("/search", async (req, res) => {
           OR: [
             { url: { contains: raw } },
             { title: { contains: raw } },
+            { metadata: { contains: raw } },
+            ...rawTokens.map((t) => ({ metadata: { contains: t } })),
             aiFilter,
             ...aiTokenFilters,
           ],
         },
-        select: { id: true, url: true, title: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, url: true, title: true, metadata: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.file.findMany({
         where: {
@@ -134,7 +168,7 @@ router.get("/search", async (req, res) => {
             ...aiTokenFilters,
           ],
         },
-        select: { id: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filePath: true, transcription: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.video.findMany({
         where: {
@@ -152,17 +186,25 @@ router.get("/search", async (req, res) => {
     const normalizeAI = (raw) => {
       const ai = parseAI(raw);
       const allTopics = Array.isArray(ai?.topics) ? ai.topics : [];
-      // Tags y topics son el mismo concepto; aiTags se usa para scoring alto (15/8)
       return {
         aiTitle:    ai?.title    ?? null,
         aiTags:     allTopics,
         aiTopics:   allTopics,
         aiCategory: ai?.category ?? null,
-        topic:      allTopics[0] ?? null, // badge único para la UI
+        topic:      allTopics[0] ?? null,
       };
     };
 
-    // Deduplicar por kind+id (la búsqueda multi-token puede traer duplicados)
+    // Excluir ítems que solo coincidían en summary (u otros campos no permitidos)
+    const allowed = (list, getFields) => list.filter((row) => matchesAllowedFields(tokensToUse, getFields(row)));
+
+    const notesFiltered = allowed(notes, (n) => ({ content: n.content, aiEnrichment: n.aiEnrichment }));
+    const linksFiltered = allowed(links, (l) => ({ url: l.url, title: l.title, metadata: l.metadata, aiEnrichment: l.aiEnrichment }));
+    const filesFiltered = allowed(files, (f) => ({ filename: f.filename, filePath: f.filePath, aiEnrichment: f.aiEnrichment }));
+    const photosFiltered = allowed(photos, (p) => ({ filename: p.filename, filePath: p.filePath, aiEnrichment: p.aiEnrichment }));
+    const audiosFiltered = allowed(audios, (a) => ({ filePath: a.filePath, transcription: a.transcription, aiEnrichment: a.aiEnrichment }));
+    const videosFiltered = allowed(videos, (v) => ({ filePath: v.filePath, title: v.title, aiEnrichment: v.aiEnrichment }));
+
     const seen = new Set();
     const dedup = (arr) => arr.filter((x) => {
       const k = `${x.kind}:${x.id}`;
@@ -172,7 +214,7 @@ router.get("/search", async (req, res) => {
     });
 
     const out = dedup([
-      ...notes.map((n) => ({
+      ...notesFiltered.map((n) => ({
         id: n.id,
         kind: "note",
         filename: n.content?.slice(0, 80) || "Nota",
@@ -181,7 +223,7 @@ router.get("/search", async (req, res) => {
         createdAt: n.createdAt,
         ...normalizeAI(n.aiEnrichment),
       })),
-      ...links.map((l) => ({
+      ...linksFiltered.map((l) => ({
         id: l.id,
         kind: "link",
         filename: l.title || l.url?.slice(0, 50) || "Enlace",
@@ -191,7 +233,7 @@ router.get("/search", async (req, res) => {
         createdAt: l.createdAt,
         ...normalizeAI(l.aiEnrichment),
       })),
-      ...files.map((f) => ({
+      ...filesFiltered.map((f) => ({
         id: f.id,
         kind: "file",
         filename: f.filename,
@@ -200,7 +242,7 @@ router.get("/search", async (req, res) => {
         createdAt: f.createdAt,
         ...normalizeAI(f.aiEnrichment),
       })),
-      ...photos.map((p) => ({
+      ...photosFiltered.map((p) => ({
         id: p.id,
         kind: "photo",
         filename: p.filename,
@@ -210,7 +252,7 @@ router.get("/search", async (req, res) => {
         createdAt: p.createdAt,
         ...normalizeAI(p.aiEnrichment),
       })),
-      ...audios.map((a) => ({
+      ...audiosFiltered.map((a) => ({
         id: a.id,
         kind: "audio",
         filename: path.basename(a.filePath) || "Audio",
@@ -219,7 +261,7 @@ router.get("/search", async (req, res) => {
         createdAt: a.createdAt,
         ...normalizeAI(a.aiEnrichment),
       })),
-      ...videos.map((v) => ({
+      ...videosFiltered.map((v) => ({
         id: v.id,
         kind: "video",
         filename: v.title || path.basename(v.filePath) || "Video",
@@ -234,7 +276,7 @@ router.get("/search", async (req, res) => {
 
     // Calcular puntuación y ordenar de mayor a menor relevancia
     const scored = out
-      .map((item) => ({ ...item, score: scoreItem(item, tokens) }))
+      .map((item) => ({ ...item, score: scoreItem(item, tokensToUse) }))
       .sort((a, b) => b.score - a.score);
 
     res.json(scored);
