@@ -37,7 +37,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
           </button>
         </div>
-        <nav className="flex flex-col p-2 mt-2">
+        <nav className="flex flex-col p-2 mt-2 flex-1">
           <button
             type="button"
             onClick={() => onNavigate?.("inbox")}
@@ -62,10 +62,11 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             <Calendar className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             {t("sidebar.calendar")}
           </button>
+          <div className="flex-1" />
           <button
             type="button"
             onClick={() => onNavigate?.("ajustes")}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200 mt-4"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200 border-t border-zinc-200 dark:border-neutral-800 mt-2 pt-4"
           >
             <Settings className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             {t("sidebar.settings")}
