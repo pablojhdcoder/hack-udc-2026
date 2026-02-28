@@ -752,7 +752,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl overflow-y-auto max-h-[85vh]"
+            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl overflow-y-auto max-h-[85vh] scrollbar-hide"
             onClick={(e) => e.stopPropagation()}
           >
             {showDeleteConfirm ? (
@@ -855,7 +855,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-2">
                       Ver nota
                     </p>
-                    <div className="rounded-xl border border-zinc-200 dark:border-neutral-700 bg-zinc-50 dark:bg-neutral-800/80 p-3 max-h-48 overflow-y-auto">
+                    <div className="rounded-xl border border-zinc-200 dark:border-neutral-700 bg-zinc-50 dark:bg-neutral-800/80 p-3 max-h-48 overflow-y-auto scrollbar-hide">
                       {loadingNote ? (
                         <div className="flex items-center justify-center py-6">
                           <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />

@@ -299,7 +299,7 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
             </header>
-            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 scrollbar-hide">
               {messages.map((msg, i) => (
                 <div
                   key={i}
