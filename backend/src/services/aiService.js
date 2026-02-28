@@ -172,7 +172,18 @@ export async function enrichFile(filePath, type, filename) {
   const extracted = await extractFileContent(absolutePath, type);
 
   // Imagen → usar GPT-4o Vision
+  // Azure OpenAI Vision sólo soporta JPEG, PNG y WEBP; y rechaza imágenes >4MB
+  const VISION_SUPPORTED_MIMES = ["image/jpeg", "image/png", "image/webp"];
+  const MAX_BASE64_BYTES = 3.5 * 1024 * 1024; // 3.5 MB para dejar margen
   if (extracted.base64 && !extracted.text) {
+    if (!VISION_SUPPORTED_MIMES.includes(extracted.mimeType)) {
+      console.warn(`[enrichFile] Tipo MIME no soportado por Vision (${extracted.mimeType}), usando fallback por metadatos`);
+      return enrichFileByMetadata(filename, type);
+    }
+    if (extracted.base64.length > MAX_BASE64_BYTES) {
+      console.warn(`[enrichFile] Imagen demasiado grande para Vision (${Math.round(extracted.base64.length / 1024)}KB base64), usando fallback por metadatos`);
+      return enrichFileByMetadata(filename, type);
+    }
     return enrichImageWithVision(extracted.base64, extracted.mimeType, filename);
   }
 
