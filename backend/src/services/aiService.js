@@ -1,23 +1,30 @@
 /**
  * aiService.js — Enriquecimiento de items con Azure OpenAI (GPT-4o + Whisper)
  *
- * Modelo recomendado:
- *   - gpt-4o  → texto, imágenes (vision), clasificación y resumen
- *   - whisper → transcripción de audio
+ * Soporta:
+ *   - Azure AI Foundry/Studio (services.ai.azure.com, api/projects) → API v1, sin api-version
+ *   - Azure OpenAI clásico (openai.azure.com) → API con api-version
  *
  * Requiere en .env:
  *   AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_API_KEY,
- *   AZURE_OPENAI_API_VERSION, AZURE_OPENAI_DEPLOYMENT,
- *   AZURE_OPENAI_WHISPER_DEPLOYMENT
+ *   AZURE_OPENAI_DEPLOYMENT, AZURE_OPENAI_WHISPER_DEPLOYMENT
+ *   (AZURE_OPENAI_API_VERSION solo para recurso clásico; opcional AZURE_OPENAI_USE_V1=true para forzar v1)
  */
 
-import { AzureOpenAI } from "openai";
+import OpenAI from "openai";
+import { AzureOpenAI } from "openai/azure";
 import { createReadStream, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { extractFileContent } from "./fileExtractService.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT?.replace(/\/$/, "") ?? "";
+const USE_V1 =
+  process.env.AZURE_OPENAI_USE_V1 === "true" ||
+  ENDPOINT.includes("services.ai.azure.com") ||
+  ENDPOINT.includes("/api/projects");
 
 // ──────────────────────────────────────────────
 // Cliente Azure OpenAI (lazy init)
@@ -27,14 +34,28 @@ let _client = null;
 
 function getClient() {
   if (!_client) {
-    _client = new AzureOpenAI({
-      endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-      apiKey: process.env.AZURE_OPENAI_API_KEY,
-      apiVersion: process.env.AZURE_OPENAI_API_VERSION ?? "2024-08-01-preview",
-      deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o",
-    });
+    if (USE_V1) {
+      // API v1: sin api-version (requerido para Azure AI Foundry/Studio)
+      _client = new OpenAI({
+        baseURL: `${ENDPOINT}/openai/v1`,
+        apiKey: process.env.AZURE_OPENAI_API_KEY,
+      });
+    } else {
+      const apiVersion =
+        process.env.AZURE_OPENAI_API_VERSION || "2024-02-15-preview";
+      _client = new AzureOpenAI({
+        endpoint: ENDPOINT,
+        apiKey: process.env.AZURE_OPENAI_API_KEY,
+        apiVersion,
+        deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o",
+      });
+    }
   }
   return _client;
+}
+
+function getDeploymentName() {
+  return process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
 }
 
 export function isAIEnabled() {
@@ -53,7 +74,7 @@ Sé conciso pero completo. Los tags deben estar en minúsculas y sin espacios (u
 async function callChat(messages, maxTokens = 800) {
   const client = getClient();
   const response = await client.chat.completions.create({
-    model: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o",
+    model: getDeploymentName(),
     messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
     response_format: { type: "json_object" },
     temperature: 0.1,
@@ -197,7 +218,7 @@ Devuelve un JSON con la siguiente estructura exacta:
 async function enrichImageWithVision(base64, mimeType, filename) {
   const client = getClient();
   const response = await client.chat.completions.create({
-    model: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o",
+    model: getDeploymentName(),
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       {
@@ -259,6 +280,31 @@ Devuelve un JSON con la siguiente estructura exacta:
 }`;
 
   const result = await callChat([{ role: "user", content: prompt }], 400);
+  return withTimestamp(result);
+}
+
+// ──────────────────────────────────────────────
+// Enriquecer VIDEO (por nombre/tipo; sin extracción de contenido)
+// ──────────────────────────────────────────────
+
+export async function enrichVideo(filename, type) {
+  const prompt = `Infiere metadatos de un vídeo basándote en su nombre y tipo.
+
+Nombre: "${filename}"
+Tipo: "${type}"
+
+Devuelve un JSON con la siguiente estructura exacta:
+{
+  "title": "título inferido del vídeo",
+  "summary": "descripción breve basada en nombre y tipo",
+  "tags": ["tag1", "tag2", ...],
+  "topics": ["tema inferido"],
+  "language": "desconocido",
+  "keyPoints": [],
+  "category": "vídeo|presentación|tutorial|grabación|otro"
+}`;
+
+  const result = await callChat([{ role: "user", content: prompt }], 500);
   return withTimestamp(result);
 }
 

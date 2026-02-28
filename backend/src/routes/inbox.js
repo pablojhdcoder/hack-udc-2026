@@ -10,6 +10,7 @@ import {
   enrichLink,
   enrichFile,
   enrichAudio,
+  enrichVideo,
 } from "../services/aiService.js";
 
 const router = Router();
@@ -19,52 +20,60 @@ const router = Router();
 // El item se crea primero → respuesta al cliente → IA en background
 // ──────────────────────────────────────────────
 
+async function saveEnrichment(model, id, data, extraField = null) {
+  const payload = { aiEnrichment: JSON.stringify(data) };
+  if (extraField && data[extraField] != null) payload[extraField] = data[extraField];
+  await model.update({ where: { id }, data: payload });
+}
+
 async function runNoteEnrichment(id, content) {
   try {
     const enrichment = await enrichNote(content);
-    await prisma.note.update({
-      where: { id },
-      data: { aiEnrichment: JSON.stringify(enrichment) },
-    });
+    await saveEnrichment(prisma.note, id, enrichment);
   } catch (err) {
     console.error(`[AI] Error enriqueciendo nota ${id}:`, err.message);
+    await saveEnrichment(prisma.note, id, { error: err.message, enrichedAt: new Date().toISOString() });
   }
 }
 
 async function runLinkEnrichment(id, url, preview) {
   try {
     const enrichment = await enrichLink(url, preview);
-    await prisma.link.update({
-      where: { id },
-      data: { aiEnrichment: JSON.stringify(enrichment) },
-    });
+    await saveEnrichment(prisma.link, id, enrichment);
   } catch (err) {
     console.error(`[AI] Error enriqueciendo link ${id}:`, err.message);
+    await saveEnrichment(prisma.link, id, { error: err.message, enrichedAt: new Date().toISOString() });
   }
 }
 
 async function runFileEnrichment(id, filePath, type, filename) {
   try {
     const enrichment = await enrichFile(filePath, type, filename);
-    await prisma.file.update({
-      where: { id },
-      data: { aiEnrichment: JSON.stringify(enrichment) },
-    });
+    await saveEnrichment(prisma.file, id, enrichment);
+    console.log("[AI] Fichero", id, "enriquecido correctamente.");
   } catch (err) {
     console.error(`[AI] Error enriqueciendo fichero ${id}:`, err.message);
+    await saveEnrichment(prisma.file, id, { error: err.message, enrichedAt: new Date().toISOString() });
+  }
+}
+
+async function runVideoEnrichment(id, filename, type) {
+  try {
+    const enrichment = await enrichVideo(filename, type);
+    await saveEnrichment(prisma.video, id, enrichment);
+  } catch (err) {
+    console.error(`[AI] Error enriqueciendo vídeo ${id}:`, err.message);
+    await saveEnrichment(prisma.video, id, { error: err.message, enrichedAt: new Date().toISOString() });
   }
 }
 
 async function runAudioEnrichment(id, filePath, type) {
   try {
     const enrichment = await enrichAudio(filePath, type);
-    const updateData = { aiEnrichment: JSON.stringify(enrichment) };
-    if (enrichment.transcription) {
-      updateData.transcription = enrichment.transcription;
-    }
-    await prisma.audio.update({ where: { id }, data: updateData });
+    await saveEnrichment(prisma.audio, id, enrichment, "transcription");
   } catch (err) {
     console.error(`[AI] Error enriqueciendo audio ${id}:`, err.message);
+    await saveEnrichment(prisma.audio, id, { error: err.message, enrichedAt: new Date().toISOString() }, "transcription");
   }
 }
 
@@ -75,6 +84,9 @@ async function runAudioEnrichment(id, filePath, type) {
 router.post("/", optionalMulter, async (req, res) => {
   try {
     const aiActive = isAIEnabled();
+    if (req.file && !aiActive) {
+      console.log("[AI] Desactivada: configura AZURE_OPENAI_ENDPOINT y AZURE_OPENAI_API_KEY en .env para enriquecimiento.");
+    }
 
     // ── Multipart: fichero subido ──
     if (req.file) {
@@ -91,7 +103,8 @@ router.post("/", optionalMulter, async (req, res) => {
         });
 
         if (aiActive) {
-          runAudioEnrichment(audio.id, relativePath, audio.type).catch(() => {});
+          console.log("[AI] Enriqueciendo audio", audio.id);
+          runAudioEnrichment(audio.id, req.file.path, audio.type).catch((e) => console.error("[AI] Audio enrichment catch:", e.message));
         }
 
         return res.status(201).json({
@@ -100,6 +113,30 @@ router.post("/", optionalMulter, async (req, res) => {
           type: audio.type,
           filePath: audio.filePath,
           createdAt: audio.createdAt,
+          aiEnrichmentPending: aiActive,
+        });
+      }
+
+      if (kind === "video") {
+        const video = await prisma.video.create({
+          data: {
+            filePath: relativePath,
+            type: type || "video",
+            inboxStatus: "pending",
+          },
+        });
+
+        if (aiActive) {
+          console.log("[AI] Enriqueciendo vídeo", video.id);
+          runVideoEnrichment(video.id, req.file.originalname, video.type).catch((e) => console.error("[AI] Video enrichment catch:", e.message));
+        }
+
+        return res.status(201).json({
+          kind: "video",
+          id: video.id,
+          type: video.type,
+          filePath: video.filePath,
+          createdAt: video.createdAt,
           aiEnrichmentPending: aiActive,
         });
       }
@@ -115,7 +152,8 @@ router.post("/", optionalMulter, async (req, res) => {
       });
 
       if (aiActive) {
-        runFileEnrichment(file.id, relativePath, file.type, file.filename).catch(() => {});
+        console.log("[AI] Enriqueciendo fichero", file.id, file.filename);
+        runFileEnrichment(file.id, req.file.path, file.type, file.filename).catch((e) => console.error("[AI] File enrichment catch:", e.message));
       }
 
       return res.status(201).json({
@@ -169,7 +207,8 @@ router.post("/", optionalMulter, async (req, res) => {
       }
 
       if (aiActive) {
-        runLinkEnrichment(link.id, url, preview).catch(() => {});
+        console.log("[AI] Enriqueciendo link", link.id);
+        runLinkEnrichment(link.id, url, preview).catch((e) => console.error("[AI] Link enrichment catch:", e.message));
       }
 
       const final = hasPreview
@@ -198,7 +237,8 @@ router.post("/", optionalMulter, async (req, res) => {
     });
 
     if (aiActive) {
-      runNoteEnrichment(note.id, note.content).catch(() => {});
+      console.log("[AI] Enriqueciendo nota", note.id);
+      runNoteEnrichment(note.id, note.content).catch((e) => console.error("[AI] Note enrichment catch:", e.message));
     }
 
     return res.status(201).json({
@@ -220,27 +260,15 @@ router.post("/", optionalMulter, async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const [links, files, audios, notes] = await Promise.all([
-      prisma.link.findMany({
-        where: { inboxStatus: "pending" },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.file.findMany({
-        where: { inboxStatus: "pending" },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.audio.findMany({
-        where: { inboxStatus: "pending" },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.note.findMany({
-        where: { inboxStatus: "pending" },
-        orderBy: { createdAt: "desc" },
-      }),
+    const [links, files, audios, notes, videos] = await Promise.all([
+      prisma.link.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
+      prisma.file.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
+      prisma.audio.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
+      prisma.note.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
+      prisma.video.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
     ]);
 
     const withKind = (items, kind) => items.map((item) => ({ ...item, kind }));
-
     const parseAI = (raw) => {
       if (!raw || typeof raw !== "string") return null;
       try {
@@ -255,6 +283,7 @@ router.get("/", async (req, res) => {
       ...withKind(files, "file"),
       ...withKind(audios, "audio"),
       ...withKind(notes, "note"),
+      ...withKind(videos, "video"),
     ]
       .map((item) => {
         const base = {
@@ -269,25 +298,18 @@ router.get("/", async (req, res) => {
           try {
             metadata = item.metadata ? JSON.parse(item.metadata) : null;
           } catch {}
-          return {
-            ...base,
-            url: item.url,
-            title: item.title,
-            image: metadata?.image ?? null,
-          };
+          return { ...base, url: item.url, title: item.title, image: metadata?.image ?? null };
         }
         if (item.kind === "note") return { ...base, content: item.content };
         if (item.kind === "file")
-          return {
-            ...base,
-            filename: item.filename,
-            filePath: item.filePath,
-            fileType: item.type,
-          };
+          return { ...base, filename: item.filename, filePath: item.filePath, fileType: item.type };
         if (item.kind === "audio")
+          return { ...base, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
+        if (item.kind === "video")
           return {
             ...base,
             filePath: item.filePath,
+            title: item.title,
             durationSeconds: item.duration ?? 0,
           };
         return base;
@@ -306,7 +328,7 @@ router.get("/", async (req, res) => {
 
 router.get("/:kind/:id", async (req, res) => {
   const { kind, id } = req.params;
-  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio };
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
   const model = modelMap[kind];
   if (!model) return res.status(400).json({ error: "kind inválido" });
 

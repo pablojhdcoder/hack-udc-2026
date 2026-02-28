@@ -1,7 +1,104 @@
+import path from "path";
+import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 import prisma from "../lib/prisma.js";
 import { buildMarkdownContent, writeMarkdown } from "./markdownService.js";
+import {
+  isAIEnabled,
+  enrichNote,
+  enrichLink,
+  enrichFile,
+  enrichAudio,
+  enrichVideo,
+} from "./aiService.js";
 
-const KINDS = ["link", "note", "file", "audio"];
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const BACKEND_ROOT = path.join(__dirname, "..", "..");
+const KINDS = ["link", "note", "file", "audio", "video"];
+
+/** Resuelve ruta absoluta del fichero (uploads/... o backend/uploads/...) */
+function resolveFilePath(relativePath) {
+  const fromCwd = path.resolve(process.cwd(), relativePath);
+  if (existsSync(fromCwd)) return fromCwd;
+  const fromBackend = path.resolve(BACKEND_ROOT, relativePath);
+  return fromBackend;
+}
+
+/**
+ * Asegura que el ítem tenga aiEnrichment antes de generar Markdown.
+ * Si falta o solo tiene error, ejecuta el enriquecimiento y actualiza la BD.
+ */
+async function ensureEnrichment(kind, id, entity) {
+  const hasValidEnrichment =
+    entity.aiEnrichment &&
+    (entity.aiEnrichment.title || entity.aiEnrichment.summary) &&
+    !entity.aiEnrichment.error;
+
+  if (hasValidEnrichment) return entity;
+  if (!isAIEnabled()) {
+    console.warn("[Process] AI no configurada: no se puede enriquecer", kind, id);
+    return entity;
+  }
+
+  let enrichment;
+  try {
+    switch (kind) {
+      case "note":
+        enrichment = await enrichNote(entity.content);
+        await prisma.note.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        break;
+      case "link":
+        enrichment = await enrichLink(entity.url, entity.metadata ?? {});
+        await prisma.link.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        break;
+      case "file": {
+        const absolutePath = resolveFilePath(entity.filePath);
+        enrichment = await enrichFile(absolutePath, entity.type, entity.filename);
+        await prisma.file.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        break;
+      }
+      case "audio": {
+        const absolutePath = resolveFilePath(entity.filePath);
+        enrichment = await enrichAudio(absolutePath, entity.type);
+        const payload = { aiEnrichment: JSON.stringify(enrichment) };
+        if (enrichment.transcription) payload.transcription = enrichment.transcription;
+        await prisma.audio.update({ where: { id }, data: payload });
+        break;
+      }
+      case "video": {
+        const filename = path.basename(entity.filePath);
+        enrichment = await enrichVideo(filename, entity.type);
+        await prisma.video.update({ where: { id }, data: { aiEnrichment: JSON.stringify(enrichment) } });
+        break;
+      }
+      default:
+        return entity;
+    }
+    console.log("[Process] Enriquecimiento aplicado al procesar:", kind, id);
+    return { ...entity, aiEnrichment: enrichment };
+  } catch (err) {
+    console.error("[Process] Error enriqueciendo al procesar:", kind, id, err.message);
+    const fallback = { error: err.message, enrichedAt: new Date().toISOString() };
+    switch (kind) {
+      case "link":
+        await prisma.link.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
+        break;
+      case "note":
+        await prisma.note.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
+        break;
+      case "file":
+        await prisma.file.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
+        break;
+      case "audio":
+        await prisma.audio.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
+        break;
+      case "video":
+        await prisma.video.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
+        break;
+    }
+    return { ...entity, aiEnrichment: fallback };
+  }
+}
 
 /**
  * Resuelve una entidad por kind e id y la normaliza para markdownService,
@@ -72,6 +169,19 @@ export async function getEntityByKindId(kind, id) {
         createdAt: audio.createdAt,
       };
     }
+    case "video": {
+      const video = await prisma.video.findUnique({ where: { id } });
+      if (!video) return null;
+      const ai = parseAI(video.aiEnrichment);
+      return {
+        kind: "video",
+        title: ai?.title ?? video.title ?? "Vídeo",
+        type: video.type,
+        filePath: video.filePath,
+        aiEnrichment: ai,
+        createdAt: video.createdAt,
+      };
+    }
     default:
       return null;
   }
@@ -96,10 +206,12 @@ function slugifyFilename(title, id) {
  */
 export async function processItem(item, destination) {
   const { kind, id } = item;
-  const entity = await getEntityByKindId(kind, id);
+  let entity = await getEntityByKindId(kind, id);
   if (!entity) {
     return { kind, id, error: "Entidad no encontrada o no procesable" };
   }
+
+  entity = await ensureEnrichment(kind, id, entity);
 
   const resolvedTitle = entity.aiEnrichment?.title ?? entity.title;
   const content = buildMarkdownContent(entity);
@@ -119,6 +231,9 @@ export async function processItem(item, destination) {
       break;
     case "audio":
       await prisma.audio.update({ where: { id }, data: updatePayload });
+      break;
+    case "video":
+      await prisma.video.update({ where: { id }, data: updatePayload });
       break;
     default:
       return { kind, id, error: "Tipo de entidad no soportado" };

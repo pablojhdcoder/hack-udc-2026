@@ -1,3 +1,4 @@
+import http from "http";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -25,6 +26,28 @@ app.get("/api/health", (_, res) => {
   res.json({ ok: true });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend running at http://localhost:${PORT}`);
-});
+// Si el puerto está en uso, probar el siguiente (3002, 3003, ...) hasta levantar
+const server = http.createServer(app);
+const PORT_BASE = Number(process.env.PORT) || 3001;
+const PORT_MAX = PORT_BASE + 20;
+
+function startServer(tryPort = PORT_BASE) {
+  server.removeAllListeners("error");
+  server.listen(tryPort, "0.0.0.0", () => {
+    console.log(`Backend running at http://localhost:${tryPort}`);
+    if (tryPort !== PORT_BASE) {
+      console.log(`(Puerto ${PORT_BASE} estaba en uso. Configura el frontend proxy a ${tryPort} o usa PORT=${tryPort})`);
+    }
+  });
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE" && tryPort < PORT_MAX) {
+      console.warn(`Puerto ${tryPort} en uso, probando ${tryPort + 1}...`);
+      server.close(() => startServer(tryPort + 1));
+    } else {
+      console.error(err);
+      process.exit(1);
+    }
+  });
+}
+
+startServer();
