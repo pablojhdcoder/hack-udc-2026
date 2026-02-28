@@ -44,8 +44,9 @@ const rowButtonClass =
 /**
  * Fila de lista unificada para Búsqueda, Fotos, Vídeo, Novedades, Favoritos y Procesados recientes.
  * Misma previsualización (FilePreview) y mismo layout en todas las vistas.
+ * Cuando se pasa `searchTokens`, resalta las tags/topic que coinciden y muestra barra de relevancia.
  */
-function VaultListItem({ item, onSelect }) {
+function VaultListItem({ item, onSelect, searchTokens }) {
   const displayName =
     item.filename ??
     item.title ??
@@ -58,6 +59,23 @@ function VaultListItem({ item, onSelect }) {
   const typeLabel = item.type ? ` · ${item.type}` : "";
   const subtitle = item.processedPath || `${statusLabel}${typeLabel} · ${formatDate(item.createdAt)}`;
 
+  // Cuando hay búsqueda activa, determinar qué tags/topic coinciden
+  const hasSearch = searchTokens && searchTokens.length > 0;
+  const matchTag = (str) =>
+    hasSearch && searchTokens.some((t) => str.toLowerCase().includes(t));
+
+  const matchingTags = hasSearch
+    ? (item.aiTags ?? []).filter((tag) => matchTag(tag))
+    : [];
+  const topicMatches = hasSearch && item.topic && matchTag(item.topic);
+  const categoryMatches = hasSearch && item.aiCategory && matchTag(item.aiCategory);
+
+  // Barra de relevancia: normaliza sobre 60 (puntuación alta razonable para 1 token)
+  const maxScore = 60;
+  const scorePercent = hasSearch && item.score
+    ? Math.min(100, Math.round((item.score / maxScore) * 100))
+    : 0;
+
   return (
     <li>
       <button type="button" onClick={() => onSelect(item)} className={rowButtonClass}>
@@ -66,12 +84,41 @@ function VaultListItem({ item, onSelect }) {
           <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             {item.topic && (
-              <span className="text-xs text-blue-400 bg-blue-950/50 px-2 py-0.5 rounded-md">
+              <span
+                className={`text-xs px-2 py-0.5 rounded-md ${
+                  topicMatches
+                    ? "text-emerald-300 bg-emerald-950/60 ring-1 ring-emerald-500/40"
+                    : "text-blue-400 bg-blue-950/50"
+                }`}
+              >
                 #{item.topic}
+              </span>
+            )}
+            {matchingTags.map((tag) => (
+              <span
+                key={tag}
+                className="text-xs text-amber-300 bg-amber-950/50 ring-1 ring-amber-500/40 px-2 py-0.5 rounded-md"
+              >
+                {tag}
+              </span>
+            ))}
+            {categoryMatches && (
+              <span className="text-xs text-violet-300 bg-violet-950/50 ring-1 ring-violet-500/40 px-2 py-0.5 rounded-md">
+                {item.aiCategory}
               </span>
             )}
             <span className="text-zinc-500 dark:text-zinc-400 text-xs truncate">{subtitle}</span>
           </div>
+          {hasSearch && scorePercent > 0 && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <div className="flex-1 h-0.5 rounded-full bg-neutral-700/50 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-brand-500 to-emerald-400 transition-all"
+                  style={{ width: `${scorePercent}%` }}
+                />
+              </div>
+            </div>
+          )}
         </div>
         <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
       </button>
@@ -546,11 +593,24 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             ) : searchResults.length === 0 ? (
               <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No se han encontrado resultados.</p>
             ) : (
-              <ul className="space-y-2">
-                {searchResults.map((item) => (
-                  <VaultListItem key={`search-${item.kind ?? "item"}-${item.id}`} item={item} onSelect={setSelectedItem} />
-                ))}
-              </ul>
+              <>
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-3">
+                  {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""} · ordenados por relevancia
+                </p>
+                <ul className="space-y-2">
+                  {searchResults.map((item) => {
+                    const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+                    return (
+                      <VaultListItem
+                        key={`search-${item.kind ?? "item"}-${item.id}`}
+                        item={item}
+                        onSelect={setSelectedItem}
+                        searchTokens={tokens}
+                      />
+                    );
+                  })}
+                </ul>
+              </>
             )}
           </div>
         ) : (

@@ -6,10 +6,6 @@ import prisma from "../lib/prisma.js";
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/**
- * Parsea el campo aiEnrichment (string JSON) y extrae title, topics y category.
- * También busca coincidencia con la query para saber si aplica como resultado de IA.
- */
 function parseAI(raw) {
   try {
     return raw ? JSON.parse(raw) : null;
@@ -19,105 +15,179 @@ function parseAI(raw) {
 }
 
 /**
- * Comprueba si la query coincide con algún campo del aiEnrichment (title, topics, category).
- * Se usa para filtrar en JS cuando SQLite ya devolvió el item por otros criterios.
+ * Calcula la puntuación de relevancia de un item frente a los tokens de búsqueda.
+ * Compara cada token contra: aiTitle, aiTags, topic, aiTopics, aiCategory, filename.
+ *
+ * Sistema de pesos:
+ *   aiTitle       → exacto: 20 | parcial: 10
+ *   aiTags        → exacto: 15 | parcial:  8
+ *   topic (DB)    → exacto: 15 | parcial:  8
+ *   aiTopics      → exacto: 12 | parcial:  6
+ *   aiCategory    → exacto: 10 | parcial:  5
+ *   filename/url  → parcial:  3
+ *
+ * Bonus de cobertura: se multiplica por (0.4 + 0.6 * fracciónTokensQueCoinciden)
+ * para premiar cuando la mayoría de palabras de la búsqueda aparecen en el item.
  */
-function aiMatches(ai, q) {
-  if (!ai) return false;
-  if (ai.title && ai.title.toLowerCase().includes(q)) return true;
-  if (ai.category && ai.category.toLowerCase().includes(q)) return true;
-  if (Array.isArray(ai.topics)) {
-    return ai.topics.some((t) => t && t.toLowerCase().includes(q));
+function scoreItem(item, tokens) {
+  if (!tokens.length) return 0;
+
+  const lc = (s) => (s ?? "").toString().toLowerCase();
+
+  const title   = lc(item.aiTitle ?? item.title ?? item.filename);
+  const fname   = lc(item.filename ?? item.url ?? "");
+  const cat     = lc(item.aiCategory);
+  const topic   = lc(item.topic);
+  const tags    = (item.aiTags ?? []).map((t) => lc(t));
+  const topics  = (item.aiTopics ?? []).map((t) => lc(t));
+
+  let totalScore = 0;
+  const matchedTokens = new Set();
+
+  for (const token of tokens) {
+    let tokenScore = 0;
+
+    // --- aiTitle (prioridad máxima) ---
+    if (title === token)         { tokenScore += 20; matchedTokens.add(token); }
+    else if (title.includes(token)) { tokenScore += 10; matchedTokens.add(token); }
+
+    // --- aiTags ---
+    for (const tag of tags) {
+      if (tag === token)            { tokenScore += 15; matchedTokens.add(token); break; }
+      else if (tag.includes(token)) { tokenScore +=  8; matchedTokens.add(token); break; }
+    }
+
+    // --- topic (campo DB) ---
+    if (topic === token)            { tokenScore += 15; matchedTokens.add(token); }
+    else if (topic.includes(token)) { tokenScore +=  8; matchedTokens.add(token); }
+
+    // --- aiTopics ---
+    for (const t of topics) {
+      if (t === token)            { tokenScore += 12; matchedTokens.add(token); break; }
+      else if (t.includes(token)) { tokenScore +=  6; matchedTokens.add(token); break; }
+    }
+
+    // --- aiCategory ---
+    if (cat === token)            { tokenScore += 10; matchedTokens.add(token); }
+    else if (cat.includes(token)) { tokenScore +=  5; matchedTokens.add(token); }
+
+    // --- filename / url (fallback) ---
+    if (fname.includes(token))    { tokenScore +=  3; matchedTokens.add(token); }
+
+    totalScore += tokenScore;
   }
-  return false;
+
+  // Bonus de cobertura: penaliza si solo coinciden pocos de los tokens buscados
+  const coverage = matchedTokens.size / tokens.length;
+  totalScore = totalScore * (0.4 + 0.6 * coverage);
+
+  return Math.round(totalScore);
 }
 
 /**
  * GET /api/search?q=...
- * Busca por filename/title/url/content y también dentro de aiEnrichment
- * (title, topics, category) en todas las entidades del vault.
- * Devuelve array normalizado con { id, kind, filename, title?, aiTitle, aiTopics, aiCategory, filePath?, url?, thumbnailUrl? }.
+ * Busca en todas las entidades del vault comparando la query (tokenizada) contra:
+ *   title, tags, topic, topics y category de la IA, además de filename/url/content.
+ * Devuelve array ordenado de mayor a menor relevancia, con campo `score`.
  */
 router.get("/search", async (req, res) => {
-  const q = (req.query.q || "").trim().toLowerCase();
-  if (!q) {
-    return res.json([]);
-  }
+  const raw = (req.query.q || "").trim().toLowerCase();
+  if (!raw) return res.json([]);
 
-  // SQLite no soporta mode: 'insensitive'; la búsqueda es case-sensitive por defecto.
-  // aiEnrichment se almacena como JSON string → contains busca la subcadena dentro del JSON completo,
-  // lo que incluye title, topics y category de forma nativa.
-  const aiFilter = { aiEnrichment: { contains: q } };
+  // Tokenizar la query: divide por espacios y elimina duplicados
+  const tokens = [...new Set(raw.split(/\s+/).filter(Boolean))];
+
+  // Para SQLite: buscar por subcadena en campos principales + JSON de aiEnrichment
+  const aiFilter = { aiEnrichment: { contains: raw } };
+
+  // También filtramos por cada token individualmente en aiEnrichment para búsquedas multi-palabra
+  const aiTokenFilters = tokens.map((t) => ({ aiEnrichment: { contains: t } }));
 
   try {
     const [notes, links, files, photos, audios, videos] = await Promise.all([
       prisma.note.findMany({
         where: {
-          OR: [{ content: { contains: q } }, aiFilter],
+          OR: [
+            { content: { contains: raw } },
+            aiFilter,
+            ...aiTokenFilters,
+          ],
         },
-        select: { id: true, content: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, content: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.link.findMany({
         where: {
           OR: [
-            { url: { contains: q } },
-            { title: { contains: q } },
+            { url: { contains: raw } },
+            { title: { contains: raw } },
             aiFilter,
+            ...aiTokenFilters,
           ],
         },
-        select: { id: true, url: true, title: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, url: true, title: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.file.findMany({
         where: {
-          OR: [{ filename: { contains: q } }, aiFilter],
+          OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters],
         },
-        select: { id: true, filename: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filename: true, filePath: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.photo.findMany({
         where: {
-          OR: [{ filename: { contains: q } }, aiFilter],
+          OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters],
         },
-        select: { id: true, filename: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filename: true, filePath: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.audio.findMany({
         where: {
           OR: [
-            { filePath: { contains: q } },
-            { transcription: { contains: q } },
+            { filePath: { contains: raw } },
+            { transcription: { contains: raw } },
             aiFilter,
+            ...aiTokenFilters,
           ],
         },
-        select: { id: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filePath: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.video.findMany({
         where: {
-          OR: [{ filePath: { contains: q } }, { title: { contains: q } }, aiFilter],
+          OR: [{ filePath: { contains: raw } }, { title: { contains: raw } }, aiFilter, ...aiTokenFilters],
         },
-        select: { id: true, filePath: true, title: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filePath: true, title: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
     ]);
 
     const toUrl = (filePath) => {
       if (!filePath) return null;
-      const basename = path.basename(filePath);
-      return `/api/uploads/${basename}`;
+      return `/api/uploads/${path.basename(filePath)}`;
     };
 
     const normalizeAI = (raw) => {
       const ai = parseAI(raw);
       return {
-        aiTitle: ai?.title ?? null,
-        aiTopics: Array.isArray(ai?.topics) ? ai.topics : [],
+        aiTitle:    ai?.title    ?? null,
+        aiTags:     Array.isArray(ai?.tags)   ? ai.tags   : [],
+        aiTopics:   Array.isArray(ai?.topics) ? ai.topics : [],
         aiCategory: ai?.category ?? null,
       };
     };
 
-    const out = [
+    // Deduplicar por kind+id (la búsqueda multi-token puede traer duplicados)
+    const seen = new Set();
+    const dedup = (arr) => arr.filter((x) => {
+      const k = `${x.kind}:${x.id}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    const out = dedup([
       ...notes.map((n) => ({
         id: n.id,
         kind: "note",
         filename: n.content?.slice(0, 80) || "Nota",
         title: n.content?.slice(0, 80) || null,
+        topic: n.topic ?? null,
         processedPath: n.processedPath,
         createdAt: n.createdAt,
         ...normalizeAI(n.aiEnrichment),
@@ -128,6 +198,7 @@ router.get("/search", async (req, res) => {
         filename: l.title || l.url?.slice(0, 50) || "Enlace",
         title: l.title,
         url: l.url,
+        topic: l.topic ?? null,
         processedPath: l.processedPath,
         createdAt: l.createdAt,
         ...normalizeAI(l.aiEnrichment),
@@ -137,6 +208,7 @@ router.get("/search", async (req, res) => {
         kind: "file",
         filename: f.filename,
         filePath: f.filePath,
+        topic: f.topic ?? null,
         processedPath: f.processedPath,
         createdAt: f.createdAt,
         ...normalizeAI(f.aiEnrichment),
@@ -147,6 +219,7 @@ router.get("/search", async (req, res) => {
         filename: p.filename,
         filePath: p.filePath,
         thumbnailUrl: toUrl(p.filePath),
+        topic: p.topic ?? null,
         processedPath: p.processedPath,
         createdAt: p.createdAt,
         ...normalizeAI(p.aiEnrichment),
@@ -156,6 +229,7 @@ router.get("/search", async (req, res) => {
         kind: "audio",
         filename: path.basename(a.filePath) || "Audio",
         filePath: a.filePath,
+        topic: a.topic ?? null,
         processedPath: a.processedPath,
         createdAt: a.createdAt,
         ...normalizeAI(a.aiEnrichment),
@@ -167,13 +241,19 @@ router.get("/search", async (req, res) => {
         title: v.title,
         filePath: v.filePath,
         thumbnailUrl: null,
+        topic: v.topic ?? null,
         processedPath: v.processedPath,
         createdAt: v.createdAt,
         ...normalizeAI(v.aiEnrichment),
       })),
-    ];
+    ]);
 
-    res.json(out);
+    // Calcular puntuación y ordenar de mayor a menor relevancia
+    const scored = out
+      .map((item) => ({ ...item, score: scoreItem(item, tokens) }))
+      .sort((a, b) => b.score - a.score);
+
+    res.json(scored);
   } catch (err) {
     console.error("[search]", err);
     res.status(500).json({ error: err.message || "Error en búsqueda" });
