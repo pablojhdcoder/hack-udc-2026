@@ -9,6 +9,8 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3001",
         changeOrigin: true,
+        // Timeout largo para rutas lentas (ej. /api/process con enriquecimiento IA)
+        timeout: 300000, // 5 min
       },
     },
   },

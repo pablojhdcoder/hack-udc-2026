@@ -1,6 +1,6 @@
 # Digital Brain — Kelea HackUDC 2026
 
-Sistema de documentación personal (cerebro digital): captura rápida en un inbox único y procesado posterior a conocimiento en Markdown.
+Sistema de documentación personal (cerebro digital): captura rápida en un inbox único y procesado posterior a conocimiento en Markdow.
 
 ## Stack
 
