@@ -62,23 +62,28 @@ function SettingsGroup({ title, children }) {
   );
 }
 
-function SettingsRow({ icon: Icon, label, children, isLast, danger }) {
+const ROW_BASE =
+  "flex items-center justify-between w-full py-4 px-4 hover:bg-neutral-800/50 cursor-pointer transition-colors border-b border-zinc-200 dark:border-neutral-800/50 last:border-b-0";
+
+function SettingsRow({ icon: Icon, label, children, danger }) {
   return (
-    <div
-      className={`flex items-center gap-3 py-3 px-4 ${!isLast ? "border-b border-zinc-200 dark:border-neutral-700" : ""}`}
-    >
-      {Icon && (
-        <div className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
-          danger ? "bg-red-500/10" : "bg-brand-500/10 dark:bg-neutral-700/60"
-        }`}>
-          <Icon className={`w-4 h-4 ${danger ? "text-red-500" : "text-brand-500 dark:text-neutral-300"}`} />
-        </div>
-      )}
-      <span className={`flex-1 text-sm font-medium ${danger ? "text-red-500" : "text-zinc-900 dark:text-white"}`}>
-        {label}
-      </span>
-      {children}
-    </div>
+    <>
+      <div className="flex items-center gap-3.5">
+        {Icon && (
+          <div
+            className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${
+              danger ? "bg-red-500/10" : "bg-brand-500/10 dark:bg-neutral-700/60"
+            }`}
+          >
+            <Icon className={`w-4 h-4 ${danger ? "text-red-500" : "text-brand-500 dark:text-neutral-300"}`} />
+          </div>
+        )}
+        <span className={`text-sm font-medium ${danger ? "text-red-500" : "text-zinc-900 dark:text-white"}`}>
+          {label}
+        </span>
+      </div>
+      <div className="flex items-center gap-2">{children}</div>
+    </>
   );
 }
 
@@ -231,93 +236,65 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
         </div>
 
         <SettingsGroup title="General">
-          <SettingsRow icon={Moon} label="Modo Oscuro" isLast={false}>
-            <ToggleSwitch on={darkMode} onClick={() => onDarkModeChange?.(!darkMode)} />
-          </SettingsRow>
-          <SettingsRow icon={Bell} label="Sugerencias de revisión" isLast={true}>
-            <ToggleSwitch on={suggestionsOn} onClick={() => setSuggestionsOn((v) => !v)} />
-          </SettingsRow>
+          <div className={ROW_BASE}>
+            <SettingsRow icon={Moon} label="Modo Oscuro">
+              <ToggleSwitch on={darkMode} onClick={() => onDarkModeChange?.(!darkMode)} />
+            </SettingsRow>
+          </div>
+          <div className={ROW_BASE}>
+            <SettingsRow icon={Bell} label="Sugerencias de revisión">
+              <ToggleSwitch on={suggestionsOn} onClick={() => setSuggestionsOn((v) => !v)} />
+            </SettingsRow>
+          </div>
         </SettingsGroup>
 
         <SettingsGroup title="Datos y privacidad">
-          <button
-            type="button"
-            onClick={() => setExportSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={FileDown} label="Exportar mis notas" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setExportSheetOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={FileDown} label="Exportar mis notas">
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button
-            type="button"
-            onClick={() => setCloudSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={Cloud} label="Copia de seguridad en la nube" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setCloudSheetOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={Cloud} label="Copia de seguridad en la nube">
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button
-            type="button"
-            onClick={() => setFreeSpaceModalOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={Trash2} label="Liberar espacio" isLast={true}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setFreeSpaceModalOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={Trash2} label="Liberar espacio">
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
 
         <SettingsGroup title="Inteligencia Artificial">
-          <button
-            type="button"
-            onClick={() => setAssistLevelSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={Bot} label="Nivel de asistencia de la IA" isLast={false}>
-              <span className="text-zinc-600 dark:text-neutral-400 text-sm mr-1">{assistLevel}</span>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setAssistLevelSheetOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={Bot} label="Nivel de asistencia de la IA">
+              <span className="text-sm text-neutral-400">{assistLevel}</span>
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button
-            type="button"
-            onClick={() => setLanguageSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={Globe} label="Idioma de los resúmenes" isLast={true}>
-              <span className="text-zinc-600 dark:text-neutral-400 text-sm mr-1">{selectedLanguage.label}</span>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setLanguageSheetOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={Globe} label="Idioma de los resúmenes">
+              <span className="text-sm text-neutral-400">{selectedLanguage.label}</span>
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
 
         <SettingsGroup title="Soporte y cuenta">
-          <button
-            type="button"
-            onClick={() => setEditProfileSheetOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={UserPen} label="Editar perfil" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setEditProfileSheetOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={UserPen} label="Editar perfil">
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button
-            type="button"
-            onClick={() => setToastVisible(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={HelpCircle} label="Centro de ayuda" isLast={false}>
-              <ChevronRight className="w-5 h-5 text-zinc-400 dark:text-neutral-500 flex-shrink-0" />
+          <button type="button" onClick={() => setToastVisible(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={HelpCircle} label="Centro de ayuda">
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button
-            type="button"
-            onClick={() => setLogoutModalOpen(true)}
-            className="w-full text-left hover:bg-zinc-200/50 dark:hover:bg-neutral-700/30 active:bg-zinc-200 dark:active:bg-neutral-700/50 transition-colors"
-          >
-            <SettingsRow icon={LogOut} label="Cerrar sesión" isLast={true} danger>
-              <ChevronRight className="w-5 h-5 text-red-500 flex-shrink-0" />
+          <button type="button" onClick={() => setLogoutModalOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={LogOut} label="Cerrar sesión" danger>
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>

@@ -396,28 +396,31 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
         </section>
       </main>
 
-      <footer className="shrink-0 z-20 grid grid-cols-2 gap-3 w-full px-5 pt-4 pb-6 bg-white border-t border-zinc-200 safe-bottom dark:bg-neutral-900 dark:border-neutral-800">
+      <footer
+        className="shrink-0 z-20 grid grid-cols-2 gap-3 w-full px-4 pt-3 bg-white border-t border-zinc-200 dark:bg-neutral-900 dark:border-neutral-800"
+        style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom, 0px))" }}
+      >
         <button
-          type="button"
-          onClick={handleDescartar}
-          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl border border-red-400/50 text-red-600 hover:bg-red-500/10 transition-colors dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
-          aria-label="Descartar"
-        >
-          <Trash2 className="w-6 h-6" />
-          <span className="text-xs font-medium">Descartar</span>
-        </button>
-        <button
-          type="button"
-          onClick={handleAprobar}
-          disabled={processing}
-          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:pointer-events-none"
-          aria-label="Aprobar"
-        >
-          {processing ? (
-            <Loader2 className="w-6 h-6 animate-spin" />
-          ) : (
-            <Check className="w-6 h-6" />
-          )}
+            type="button"
+            onClick={handleDescartar}
+            className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl border border-red-400/50 text-red-600 hover:bg-red-500/10 transition-colors dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
+            aria-label="Descartar"
+          >
+            <Trash2 className="w-6 h-6" />
+            <span className="text-xs font-medium">Descartar</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleAprobar}
+            disabled={processing}
+            className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:pointer-events-none"
+            aria-label="Aprobar"
+          >
+            {processing ? (
+              <Loader2 className="w-6 h-6 animate-spin" />
+            ) : (
+              <Check className="w-6 h-6" />
+            )}
           <span className="text-xs font-medium">{processing ? "Procesando…" : "Aprobar"}</span>
         </button>
       </footer>
