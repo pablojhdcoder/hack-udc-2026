@@ -29,17 +29,27 @@ function resolveFilePath(relativePath) {
  * Si falta o solo tiene error, ejecuta el enriquecimiento y actualiza la BD.
  */
 async function ensureEnrichment(kind, id, entity) {
+  console.log(`[ensureEnrichment] Verificando ${kind} ${id}`);
+  console.log(`[ensureEnrichment] entity.aiEnrichment:`, entity.aiEnrichment);
+  
   const hasValidEnrichment =
     entity.aiEnrichment &&
     (entity.aiEnrichment.title || entity.aiEnrichment.summary) &&
     !entity.aiEnrichment.error;
 
-  if (hasValidEnrichment) return entity;
+  console.log(`[ensureEnrichment] hasValidEnrichment: ${hasValidEnrichment}`);
+  
+  if (hasValidEnrichment) {
+    console.log(`[ensureEnrichment] Ya tiene enriquecimiento válido, saltando IA`);
+    return entity;
+  }
+  
   if (!isAIEnabled()) {
     console.warn("[Process] AI no configurada: no se puede enriquecer", kind, id);
     return entity;
   }
 
+  console.log(`[ensureEnrichment] Llamando a enriquecer con IA...`);
   let enrichment;
   try {
     switch (kind) {
@@ -206,17 +216,31 @@ function slugifyFilename(title, id) {
  */
 export async function processItem(item, destination) {
   const { kind, id } = item;
+  console.log(`[Process] Procesando ${kind} ${id} -> destino: ${destination}`);
+  
   let entity = await getEntityByKindId(kind, id);
   if (!entity) {
+    console.error(`[Process] ❌ Entidad no encontrada: ${kind} ${id}`);
     return { kind, id, error: "Entidad no encontrada o no procesable" };
   }
+  console.log(`[Process] ✅ Entidad encontrada: ${kind} ${id}`);
+  console.log(`[Process] Título: ${entity.title}`);
+  console.log(`[Process] Tiene aiEnrichment: ${!!entity.aiEnrichment}`);
 
   entity = await ensureEnrichment(kind, id, entity);
+  console.log(`[Process] Después de ensureEnrichment, aiEnrichment:`, entity.aiEnrichment ? "presente" : "ausente");
 
   const resolvedTitle = entity.aiEnrichment?.title ?? entity.title;
+  console.log(`[Process] Título resuelto: ${resolvedTitle}`);
+  
   const content = buildMarkdownContent(entity);
+  console.log(`[Process] Contenido Markdown generado: ${content.length} caracteres`);
+  
   const filename = slugifyFilename(resolvedTitle, id);
+  console.log(`[Process] Nombre de archivo: ${filename}`);
+  
   const processedPath = writeMarkdown(destination, filename, content);
+  console.log(`[Process] ✅ Archivo escrito en: ${processedPath}`);
 
   const updatePayload = { inboxStatus: "processed", processedPath };
   switch (kind) {
