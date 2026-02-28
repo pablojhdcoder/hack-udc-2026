@@ -152,7 +152,7 @@ export async function getVaultFolders() {
  * @param {number} limit
  * @returns {Promise<Array<{ kind, id, title, processedPath, createdAt }>>}
  */
-export async function getProcessedRecent(limit = 20) {
+export async function getProcessedRecent(limit = 5) {
   const res = await fetch(`${API_BASE}/inbox/processed/recent?limit=${limit}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();

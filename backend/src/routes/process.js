@@ -9,7 +9,7 @@ function isValidIdEntry(obj) {
     typeof obj === "object" &&
     typeof obj.kind === "string" &&
     typeof obj.id === "string" &&
-    ["link", "note", "file", "audio", "video"].includes(obj.kind) &&
+    ["link", "note", "file", "photo", "audio", "video"].includes(obj.kind) &&
     obj.id.trim().length > 0
   );
 }

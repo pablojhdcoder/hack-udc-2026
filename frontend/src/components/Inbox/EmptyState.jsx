@@ -16,7 +16,7 @@ export default function EmptyState({ isSearch }) {
       </div>
       <h2 className="text-lg font-medium text-zinc-700 dark:text-zinc-300 mb-2">Tu cerebro está despejado</h2>
       <p className="text-zinc-600 dark:text-zinc-500 text-sm max-w-[260px] leading-relaxed">
-        Captura tu primera idea abajo.
+        Captura ideas abajo.
       </p>
     </div>
   );
