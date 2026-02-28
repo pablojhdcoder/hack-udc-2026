@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, FileText, Link2, File, FileCode, Image, Mic, Video, Play, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X } from "lucide-react";
-import { getYouTubeVideoId } from "../../utils/youtube";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X } from "lucide-react";
+import FilePreview from "../shared/FilePreview";
 import {
   getVaultFolders,
   getProcessedRecent,
@@ -27,17 +27,6 @@ const ICON_BY_KIND = {
   favorite: Star,
 };
 
-const ICON_STYLE_BY_KIND = {
-  note: { Icon: FileText, text: "text-emerald-400", bg: "bg-emerald-400/10" },
-  link: { Icon: Link2, text: "text-sky-400", bg: "bg-sky-400/10" },
-  file: { Icon: FileCode, text: "text-red-400", bg: "bg-red-400/10" },
-  photo: { Icon: Image, text: "text-zinc-400", bg: "bg-neutral-700" },
-  audio: { Icon: Mic, text: "text-amber-400", bg: "bg-amber-400/10" },
-  video: { Icon: Video, text: "text-zinc-400", bg: "bg-neutral-700" },
-  novelty: { Icon: Sparkles, text: "text-brand-500", bg: "bg-brand-500/10" },
-  favorite: { Icon: Star, text: "text-brand-500", bg: "bg-brand-500/10" },
-};
-
 const KIND_LABEL = {
   note: "Notas",
   link: "Enlaces",
@@ -49,95 +38,12 @@ const KIND_LABEL = {
   favorite: "Favoritos",
 };
 
-const thumbImgClass = "w-14 h-14 rounded-xl object-cover flex-shrink-0 border border-neutral-800";
-
-/** Construye URL de miniatura para foto/archivo (filePath puede ser relativo o con backslashes). */
-function buildUploadThumbUrl(filePath) {
-  if (!filePath || typeof filePath !== "string") return null;
-  const normalized = filePath.trim().replace(/\\/g, "/");
-  return normalized ? `/api/uploads/${normalized}` : null;
-}
-
-/** Overlay de Play para vídeos/YouTube (centro, círculo oscuro semitransparente, icono play blanco). */
-function PlayOverlay() {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none" aria-hidden>
-      <div className="w-9 h-9 rounded-full bg-black/60 flex items-center justify-center text-white ring-2 ring-white/30">
-        <Play className="w-4 h-4 ml-0.5" fill="currentColor" />
-      </div>
-    </div>
-  );
-}
-
-/**
- * Miniatura/icono izquierdo unificado (w-14 h-14) para todas las vistas:
- * Búsqueda, Fotos, Vídeo, Novedades, Favoritos, Procesados recientes.
- * - Fotos: <img> con thumbnailUrl o filePath; onError → icono de fallback.
- * - Vídeos: miniatura (thumbnailUrl o YouTube desde url/filePath) + overlay Play.
- * - Enlaces YouTube: miniatura + Play.
- * - Resto: icono con color por tipo.
- */
-function ItemThumbnail({ item }) {
-  const [imgError, setImgError] = useState(false);
-  const kind = item.kind ?? item.sourceKind;
-  const type = item.type ?? item.fileType ?? "";
-  const isPhoto = kind === "photo" || (kind === "file" && (type === "image" || type === "photo"));
-  const isVideo = kind === "video";
-  const linkUrl = item.url ?? null;
-  const videoUrl = isVideo ? (item.url || item.filePath || "") : linkUrl;
-  const youtubeId = getYouTubeVideoId(videoUrl);
-  const isYouTube = Boolean(youtubeId);
-
-  const photoThumbUrl =
-    item.thumbnailUrl ||
-    (isPhoto && item.filePath ? buildUploadThumbUrl(item.filePath) : null);
-  const videoThumbUrl =
-    item.thumbnailUrl ||
-    (isYouTube ? `https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg` : null) ||
-    (isVideo && item.filePath ? buildUploadThumbUrl(item.filePath) : null);
-
-  const showPhotoImg = isPhoto && photoThumbUrl && !imgError;
-  const showVideoThumb = (isVideo || isYouTube) && videoThumbUrl && !imgError;
-
-  const style = ICON_STYLE_BY_KIND[kind] ?? ICON_STYLE_BY_KIND.note;
-  const { Icon, text, bg } = style;
-
-  if (showVideoThumb) {
-    return (
-      <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 border border-neutral-800 shadow-md">
-        <img
-          src={videoThumbUrl}
-          alt=""
-          className="w-full h-full object-cover"
-          onError={() => setImgError(true)}
-        />
-        <PlayOverlay />
-      </div>
-    );
-  }
-  if (showPhotoImg) {
-    return (
-      <img
-        src={photoThumbUrl}
-        alt=""
-        className={thumbImgClass}
-        onError={() => setImgError(true)}
-      />
-    );
-  }
-  return (
-    <div className={`w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 ${bg}`}>
-      <Icon className={`w-7 h-7 ${text}`} />
-    </div>
-  );
-}
-
 const rowButtonClass =
   "w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-neutral-800/60 dark:border-neutral-700/50 dark:hover:bg-neutral-800/80";
 
 /**
  * Fila de lista unificada para Búsqueda, Fotos, Vídeo, Novedades, Favoritos y Procesados recientes.
- * Misma previsualización (ItemThumbnail) y mismo layout en todas las vistas.
+ * Misma previsualización (FilePreview) y mismo layout en todas las vistas.
  */
 function VaultListItem({ item, onSelect }) {
   const displayName =
@@ -155,7 +61,7 @@ function VaultListItem({ item, onSelect }) {
   return (
     <li>
       <button type="button" onClick={() => onSelect(item)} className={rowButtonClass}>
-        <ItemThumbnail item={item} />
+        <FilePreview item={item} />
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
