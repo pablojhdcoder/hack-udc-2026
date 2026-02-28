@@ -21,8 +21,11 @@ const router = Router();
 // ──────────────────────────────────────────────
 
 async function saveEnrichment(model, id, data, extraField = null) {
-  const payload = { aiEnrichment: JSON.stringify(data) };
+  // topic va a la columna topic; el resto del objeto solo a aiEnrichment (sin topic)
+  const { topic, ...enrichmentOnly } = data;
+  const payload = { aiEnrichment: JSON.stringify(enrichmentOnly) };
   if (extraField && data[extraField] != null) payload[extraField] = data[extraField];
+  if (topic != null && String(topic).trim()) payload.topic = String(topic).trim().slice(0, 120);
   await model.update({ where: { id }, data: payload });
 }
 

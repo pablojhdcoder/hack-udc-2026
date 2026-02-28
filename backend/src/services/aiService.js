@@ -78,18 +78,32 @@ async function azureChat(messages, maxTokens = 800) {
 // ──────────────────────────────────────────────
 // Esquema de enriquecimiento estándar esperado:
 // {
-//   title, summary, tags, topics, language, keyPoints,
+//   title, summary, tags, topics, topic, language, keyPoints,
 //   sentiment?, category?, enrichedAt
 // }
+// topic = 1-2 palabras, consistente para agrupar contenido relacionado
 // ──────────────────────────────────────────────
+
+const TOPIC_INSTRUCTION = `IMPORTANTE - Campo "topic": debes incluir SIEMPRE un campo "topic" con UNA o DOS palabras como máximo (sustantivo común o frase muy corta). Este topic debe ser CONSISTENTE para agrupar contenido relacionado: usa el mismo topic para cosas que traten del mismo ámbito. Ejemplos: un documento sobre un perro y otro sobre comida para perros → ambos "perro" o "animales"; recetas y ingredientes de cocina → "cocina"; apuntes de una asignatura → el nombre de la asignatura o "estudio". Usa el idioma del contenido. Preferir términos amplios y reutilizables.`;
 
 const SYSTEM_PROMPT = `Eres un asistente experto en análisis y clasificación de contenido digital para un "Second Brain" personal.
 Tu tarea es extraer metadatos ricos y estructurados del contenido que se te proporciona.
 Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.
-Sé conciso pero completo. Los tags deben estar en minúsculas y sin espacios (usa guiones si hace falta).`;
+Sé conciso pero completo. Los tags deben estar en minúsculas y sin espacios (usa guiones si hace falta).
+${TOPIC_INSTRUCTION}`;
+
+/** Normaliza topic a 1-2 palabras (el modelo a veces devuelve más). */
+function normalizeTopic(topic) {
+  if (topic == null || typeof topic !== "string") return null;
+  const trimmed = topic.trim().slice(0, 80);
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  return words.slice(0, 2).join(" ") || null;
+}
 
 function withTimestamp(data) {
-  return { ...data, enrichedAt: new Date().toISOString() };
+  const topic = normalizeTopic(data.topic ?? data.topics?.[0]);
+  return { ...data, topic: topic || data.topic, enrichedAt: new Date().toISOString() };
 }
 
 function callChat(messages, maxTokens = 800) {
@@ -117,6 +131,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "resumen en 2-3 frases",
   "tags": ["tag1", "tag2", ...],
   "topics": ["tema1", "tema2"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado (ej: perro, cocina, trabajo)",
   "language": "es|en|...",
   "keyPoints": ["punto1", "punto2", ...],
   "sentiment": "positivo|negativo|neutro",
@@ -147,6 +162,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "resumen del recurso en 2-3 frases",
   "tags": ["tag1", "tag2", ...],
   "topics": ["tema1", "tema2"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado",
   "language": "es|en|...",
   "keyPoints": ["punto clave 1", "punto clave 2"],
   "category": "categoría amplia (tecnología, noticias, tutorial, etc.)",
@@ -196,6 +212,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "resumen en 2-3 frases",
   "tags": ["tag1", "tag2", ...],
   "topics": ["tema1", "tema2"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado",
   "language": "es|en|...",
   "keyPoints": ["punto clave 1", "punto clave 2", ...],
   "category": "categoría amplia",
@@ -232,6 +249,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "descripción detallada en 2-3 frases",
   "tags": ["tag1", "tag2"],
   "topics": ["tema1", "tema2"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado",
   "language": "es|en|...",
   "keyPoints": ["elemento destacado 1", "elemento destacado 2"],
   "category": "screenshot|fotografía|diagrama|infografía|otro",
@@ -280,6 +298,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "descripción breve basada en nombre y tipo",
   "tags": ["tag1", "tag2"],
   "topics": ["tema inferido"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado",
   "language": "desconocido",
   "keyPoints": [],
   "category": "categoría inferida"
@@ -305,6 +324,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "descripción breve basada en nombre y tipo",
   "tags": ["tag1", "tag2", ...],
   "topics": ["tema inferido"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado",
   "language": "desconocido",
   "keyPoints": [],
   "category": "vídeo|presentación|tutorial|grabación|otro"
@@ -373,6 +393,7 @@ Devuelve un JSON con la siguiente estructura exacta:
   "summary": "resumen en 2-3 frases",
   "tags": ["tag1", "tag2", ...],
   "topics": ["tema1", "tema2"],
+  "topic": "una o dos palabras para agrupar con contenido relacionado",
   "language": "es|en|...",
   "keyPoints": ["punto clave 1", "punto clave 2"],
   "sentiment": "positivo|negativo|neutro",

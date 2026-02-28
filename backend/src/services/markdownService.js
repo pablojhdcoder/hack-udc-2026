@@ -62,6 +62,8 @@ export function buildMarkdownContent(item) {
 
   if (tags) frontmatterLines.push(`tags: [${tags}]`);
   if (topics) frontmatterLines.push(`topics: [${topics.split(", ").map((t) => `"${t}"`).join(", ")}]`);
+  const topicValue = item.topic ?? ai?.topic;
+  if (topicValue) frontmatterLines.push(`topic: "${String(topicValue).replace(/"/g, "'")}"`);
   if (ai?.language) frontmatterLines.push(`language: ${ai.language}`);
   if (ai?.category) frontmatterLines.push(`category: "${ai.category}"`);
   if (ai?.sentiment) frontmatterLines.push(`sentiment: ${ai.sentiment}`);
