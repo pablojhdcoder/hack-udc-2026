@@ -34,9 +34,9 @@ export default function FileCard({ item }) {
   const isImage = item.fileType === "image" && previewUrl;
 
   return (
-    <article className="rounded-xl bg-zinc-800/80 border border-zinc-700/50 overflow-hidden">
+    <article className="rounded-xl bg-zinc-50 border border-zinc-200 overflow-hidden dark:bg-zinc-800/80 dark:border-zinc-700/50">
       {isImage && (
-        <div className="aspect-video bg-zinc-800 flex items-center justify-center">
+        <div className="aspect-video bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
           <img
             src={previewUrl}
             alt=""
@@ -53,7 +53,7 @@ export default function FileCard({ item }) {
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-zinc-100 font-medium text-sm truncate">{item.filename}</p>
+          <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm truncate">{item.filename}</p>
           <p className="text-zinc-500 text-xs mt-0.5 capitalize">{item.fileType}</p>
           <p className="text-zinc-500 text-xs mt-2">{formatDate(item.createdAt)}</p>
         </div>

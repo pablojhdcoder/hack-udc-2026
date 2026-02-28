@@ -39,14 +39,14 @@ export default function Header({
 
   if (isSearchOpen) {
     return (
-      <header className="sticky top-0 z-30 flex items-center gap-2 h-14 px-4 bg-zinc-900 border-b border-zinc-800 safe-top">
+      <header className="shrink-0 z-30 flex items-center gap-2 h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
         <button
           type="button"
           onClick={handleCloseSearch}
-          className="p-2 -ml-2 rounded-lg hover:bg-zinc-800 transition-colors"
+          className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           aria-label="Cerrar búsqueda"
         >
-          <X className="w-5 h-5 text-zinc-300" />
+          <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
         </button>
         <input
           ref={inputRef}
@@ -55,7 +55,7 @@ export default function Header({
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
           placeholder="Buscar en el inbox..."
-          className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
+          className="flex-1 bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2.5 text-zinc-900 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-500"
           aria-label="Buscar"
         />
         <button
@@ -70,32 +70,32 @@ export default function Header({
   }
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between h-14 px-4 bg-zinc-900 border-b border-zinc-800 safe-top">
+    <header className="shrink-0 z-30 flex items-center justify-between h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
       <button
         type="button"
         onClick={onMenuClick}
-        className="p-2 -ml-2 rounded-lg hover:bg-zinc-800 transition-colors"
+        className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
         aria-label="Abrir menú"
       >
-        <Menu className="w-6 h-6 text-zinc-300" />
+        <Menu className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
       </button>
-      <h1 className="text-lg font-semibold text-zinc-100">Tu Inbox</h1>
+      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Tu Inbox</h1>
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={handleOpenSearch}
-          className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           aria-label="Buscar"
         >
-          <Search className="w-5 h-5 text-zinc-300" />
+          <Search className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
         </button>
         <button
           type="button"
           onClick={onFilterClick}
-          className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           aria-label="Filtros"
         >
-          <Filter className="w-5 h-5 text-zinc-300" />
+          <Filter className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
         </button>
       </div>
     </header>
