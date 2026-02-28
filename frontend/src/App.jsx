@@ -80,15 +80,14 @@ export default function App() {
     const userMessage = { role: "user", content: text };
     setMessages((prev) => [...prev, userMessage]);
     setChatLoading(true);
-    const messagesWithUser = [...messages, userMessage];
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: messagesWithUser }),
+        body: JSON.stringify({ message: text, messages: [...messages, userMessage] }),
       });
       const data = await res.json().catch(() => ({}));
-      const aiContent = data?.message ?? data?.content ?? "No pude generar una respuesta. Intenta de nuevo.";
+      const aiContent = data?.reply ?? data?.message ?? data?.content ?? "No pude generar una respuesta. Intenta de nuevo.";
       setMessages((prev) => [...prev, { role: "ai", content: aiContent }]);
     } catch {
       setMessages((prev) => [
@@ -305,7 +304,8 @@ export default function App() {
                 </div>
               ))}
               {chatLoading && (
-                <div className="self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]">
+                <div className="self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
                   <p className="text-sm text-neutral-400">{t("chat.typing")}</p>
                 </div>
               )}
