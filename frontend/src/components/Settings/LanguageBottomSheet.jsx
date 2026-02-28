@@ -30,12 +30,12 @@ export default function LanguageBottomSheet({ isOpen, onClose }) {
         className="fixed bottom-0 left-0 right-0 z-50 w-full max-w-[430px] mx-auto bg-[#1c1c1e] rounded-t-3xl p-6 transition-transform duration-300 animate-slide-in-bottom"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 2rem)" }}
         aria-modal="true"
-        aria-label={t("settings.summaryLanguageTitle")}
+        aria-label={t("settings.appLanguageTitle")}
       >
         <div className="w-12 h-1.5 bg-neutral-600 rounded-full mx-auto mb-4" aria-hidden />
         <div className="flex justify-between items-center mb-2">
           <h2 className="text-lg font-semibold text-white">
-            {t("settings.summaryLanguageTitle")}
+            {t("settings.appLanguageTitle")}
           </h2>
           <button
             type="button"

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Mic, Send, Paperclip, Camera, FileUp, Square, X } from "lucide-react";
+import { useAppLanguage } from "../../context/LanguageContext";
 
 export default function FooterCapture({
   onProcessClick,
@@ -14,6 +15,7 @@ export default function FooterCapture({
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const [streamReady, setStreamReady] = useState(false);
+  const { t } = useAppLanguage();
   const fileInputRef = useRef(null);
   const videoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -84,7 +86,7 @@ export default function FooterCapture({
 
     let cancelled = false;
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("Tu navegador no soporta la cámara. Usa HTTPS.");
+      setCameraError(t("common.cameraUnsupported"));
       return () => {
         video.removeEventListener("loadeddata", onReady);
         video.removeEventListener("error", onError);
@@ -110,7 +112,7 @@ export default function FooterCapture({
       })
       .catch((err) => {
         if (!cancelled) {
-          setCameraError(err?.message ?? "No se pudo abrir la cámara. Comprueba los permisos o usa HTTPS.");
+          setCameraError(err?.message ?? t("common.cameraError"));
         }
       });
 
@@ -202,10 +204,10 @@ export default function FooterCapture({
       mediaRecorder.start(200);
       setRecording(true);
     } catch (err) {
-      setRecordingError(err?.message ?? "No se pudo acceder al micrófono");
+      setRecordingError(err?.message ?? t("common.micError"));
       setRecording(false);
     }
-  }, [recording, onAdd, stopStream]);
+  }, [recording, onAdd, stopStream, t]);
 
   const handleSend = async () => {
     const raw = inputValue.trim();
@@ -274,7 +276,7 @@ export default function FooterCapture({
               type="button"
               onClick={handleCloseCamera}
               className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
-              aria-label="Cerrar cámara"
+              aria-label={t("common.closeCamera")}
             >
               <X className="w-6 h-6" />
             </button>
@@ -285,14 +287,14 @@ export default function FooterCapture({
               onClick={handleCloseCamera}
               className="px-6 py-3 rounded-xl bg-white/20 text-white font-medium text-sm hover:bg-white/30"
             >
-              Cancelar
+              {t("common.cancel")}
             </button>
             <button
               type="button"
               onClick={handleCapturePhoto}
               disabled={!!cameraError || !streamReady}
               className="w-16 h-16 rounded-full bg-white border-4 border-white/50 shadow-lg hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center"
-              aria-label="Capturar foto"
+              aria-label={t("common.capturePhoto")}
             >
               {!streamReady && !cameraError && (
                 <span className="w-6 h-6 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
@@ -310,7 +312,7 @@ export default function FooterCapture({
               onClick={onProcessClick}
               className="w-full py-2.5 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-sm transition-colors"
             >
-              Procesar {pendingCount} notas
+              {t("home.processButton", { count: pendingCount })}
             </button>
           </div>
         </div>
@@ -331,7 +333,7 @@ export default function FooterCapture({
             type="button"
             onClick={handleAttachClick}
             className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200 rounded-full transition-colors cursor-pointer shrink-0 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800"
-            aria-label="Adjuntar archivo"
+            aria-label={t("common.attachFile")}
             aria-expanded={attachMenuOpen}
           >
             <Paperclip className="w-5 h-5" />
@@ -350,7 +352,7 @@ export default function FooterCapture({
                   className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-700 text-zinc-800 dark:text-zinc-200 text-left text-sm"
                 >
                   <FileUp className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
-                  Subir archivo
+                  {t("common.uploadFile")}
                 </button>
               </div>
             </>
@@ -361,20 +363,20 @@ export default function FooterCapture({
         <div className="flex-1 flex items-center bg-zinc-100 border border-zinc-200 rounded-full px-4 py-1.5 min-h-[44px] dark:bg-neutral-900 dark:border-neutral-800">
           <input
             type="text"
-            placeholder="Escribe o pega un enlace..."
+            placeholder={t("input.placeholder")}
             className="w-full bg-transparent text-zinc-900 dark:text-white outline-none placeholder-neutral-500 py-1 text-sm min-w-0"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={sending}
-            aria-label="Entrada de texto"
+            aria-label={t("input.textInputLabel")}
           />
           <div className="flex items-center gap-3 text-neutral-400 ml-2 shrink-0">
             <button
               type="button"
               onClick={handleOpenCamera}
               className="w-5 h-5 flex items-center justify-center hover:text-white cursor-pointer transition-colors"
-              aria-label="Tomar foto"
+              aria-label={t("common.takePhoto")}
             >
               <Camera className="w-5 h-5" />
             </button>
@@ -387,7 +389,7 @@ export default function FooterCapture({
                   ? "bg-red-500 text-white hover:bg-red-600"
                   : "hover:text-white"
               }`}
-              aria-label={recording ? "Detener grabación" : "Grabar audio"}
+              aria-label={recording ? t("common.stopRecording") : t("common.recordAudio")}
             >
               {recording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
@@ -400,7 +402,7 @@ export default function FooterCapture({
           onClick={handleSend}
           disabled={sending || !inputValue.trim()}
           className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-full shrink-0 flex items-center justify-center shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100"
-          aria-label="Enviar"
+          aria-label={t("common.send")}
         >
           <Send className="w-5 h-5 ml-0.5" />
         </button>

@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { getInbox, processItems, discardItem, updateInboxEnrichment } from "../../api/client";
+import { useAppLanguage } from "../../context/LanguageContext";
 
 const ICON_BY_KIND = {
   link: Link2,
@@ -33,10 +34,10 @@ function getDestinationFromKind(kind) {
 }
 
 /** Etiqueta para el badge "Se guardará en: [Tipo]" */
-function getTypeLabel(item) {
-  if (!item) return "Nota";
-  const kindLabels = { note: "Nota", link: "Enlace", file: "Archivo", photo: "Foto", audio: "Audio", video: "Vídeo" };
-  return kindLabels[item.kind] ?? item.type ?? "Nota";
+function getTypeLabel(item, t) {
+  if (!item) return t("processing.typeNote");
+  const keyMap = { note: "processing.typeNote", link: "processing.typeLink", file: "processing.typeFile", photo: "processing.typePhoto", audio: "processing.typeAudio", video: "processing.typeVideo" };
+  return t(keyMap[item.kind] ?? "processing.typeNote");
 }
 
 /** Extrae resumen de la IA del ítem (aiEnrichment.summary o aiSummary). */
@@ -74,23 +75,22 @@ function getItemTopics(item) {
   return [];
 }
 
-const DEFAULT_NOTE_BODY = "Breve resumen generado por IA sobre el contenido capturado...";
-
-function getRawPreview(item) {
+function getRawPreview(item, t) {
   if (item.content) return item.content;
   if (item.url) return item.title ? `${item.title}\n${item.url}` : item.url;
   if (item.filename) return item.filename;
-  if (item.kind === "audio") return "Nota de voz";
-  return "Sin contenido";
+  if (item.kind === "audio") return t("common.voiceNote");
+  return t("common.noContent");
 }
 
 export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
+  const { t } = useAppLanguage();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
-  const [editedSummary, setEditedSummary] = useState(DEFAULT_NOTE_BODY);
+  const [editedSummary, setEditedSummary] = useState("");
   const [editedTopics, setEditedTopics] = useState([]);
   const [topicsInput, setTopicsInput] = useState("");
   const [processing, setProcessing] = useState(false);
@@ -121,11 +121,11 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
     const summary = item ? getAISummary(item) : null;
     const topics = item ? getItemTopics(item) : [];
     setEditedTitle(title || "");
-    setEditedSummary(summary || DEFAULT_NOTE_BODY);
+    setEditedSummary(summary || t("processing.aiSummaryFallback"));
     setEditedTopics(topics);
     setTopicsInput(topics.join(", "));
     setIsEditing(false);
-  }, [currentIndex, items]);
+  }, [currentIndex, items, t]);
 
   const currentItem = items[currentIndex];
   const total = items.length;
@@ -143,7 +143,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
       setCurrentIndex(0);
       if (list.length === 0) onBack();
     } catch (err) {
-      setProcessError(err?.message ?? "Error al descartar");
+      setProcessError(err?.message ?? t("processing.errorDiscard"));
     }
   };
 
@@ -200,7 +200,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
       onProcessDone?.();
       await loadInbox();
     } catch (err) {
-      setProcessError(err?.message ?? "Error al procesar");
+      setProcessError(err?.message ?? t("processing.errorProcessing"));
     } finally {
       setProcessing(false);
     }
@@ -210,10 +210,10 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
     return (
       <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
         <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
-          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800" aria-label="Volver">
+          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800" aria-label={t("processing.backAria")}>
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
+          <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t("processing.title")}</h1>
           <div className="w-10" />
         </header>
         <main className="flex-1 flex items-center justify-center">
@@ -234,8 +234,8 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                   <Check className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold">Idea guardada en el baúl</p>
-                  <p className="text-xs opacity-90 truncate">Ruta: {successInfo.destination}</p>
+                  <p className="text-sm font-semibold">{t("processing.ideaSavedInVault")}</p>
+                  <p className="text-xs opacity-90 truncate">{t("processing.path")} {successInfo.destination}</p>
                 </div>
               </div>
               <div className="flex flex-row items-center gap-2 ml-4 flex-shrink-0 -mt-0.5">
@@ -247,13 +247,13 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                   }}
                   className="text-xs font-medium underline decoration-white/70 underline-offset-2"
                 >
-                  Ver
+                  {t("common.view")}
                 </button>
                 <button
                   type="button"
                   onClick={() => setSuccessInfo(null)}
                   className="p-1 text-white/70 hover:text-white rounded-full hover:bg-white/20 transition-colors cursor-pointer"
-                  aria-label="Cerrar"
+                  aria-label={t("common.close")}
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -262,16 +262,16 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
           </div>
         )}
         <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-neutral-900 dark:border-neutral-800">
-          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800" aria-label="Volver">
+          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800" aria-label={t("processing.backAria")}>
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>
-          <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
+          <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t("processing.title")}</h1>
           <div className="w-10" />
         </header>
         <main className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
-          <p className="text-zinc-700 dark:text-zinc-300 text-lg font-medium text-center">Tu cerebro está despejado</p>
+          <p className="text-zinc-700 dark:text-zinc-300 text-lg font-medium text-center">{t("processing.emptyTitle")}</p>
           <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center">
-            {successInfo ? "La idea se ha guardado en el baúl. Pulsa «Ver» arriba para ir a la carpeta o vuelve a la fábrica." : "No hay más ideas por procesar."}
+            {successInfo ? t("processing.emptyAfterSave") : t("processing.emptyNoMore")}
           </p>
           <div className="flex flex-col sm:flex-row gap-3">
             {successInfo && (
@@ -283,7 +283,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                 }}
                 className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-medium"
               >
-                Ver en el Baúl
+                {t("processing.viewInVault")}
               </button>
             )}
             <button
@@ -291,7 +291,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
               onClick={onBack}
               className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-neutral-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium hover:bg-zinc-100 dark:hover:bg-neutral-800"
             >
-              Volver a la fábrica
+              {t("processing.backToFactory")}
             </button>
           </div>
         </main>
@@ -300,7 +300,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   }
 
   const IconComponent = ICON_BY_KIND[currentItem.kind] ?? FileText;
-  const rawPreview = getRawPreview(currentItem);
+  const rawPreview = getRawPreview(currentItem, t);
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900 safe-bottom">
@@ -347,13 +347,13 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
             type="button"
             onClick={onBack}
             className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors"
-            aria-label="Volver a la fábrica de las ideas"
+            aria-label={t("processing.backToFactoryAria")}
           >
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>
           <div className="flex-1 flex flex-col items-center justify-center py-1">
             <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm">
-              Procesando {currentIndex + 1} de {total}
+              {t("processing.processingCount", { current: currentIndex + 1, total })}
             </p>
             <div className="w-32 h-1.5 mt-1 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
               <div
@@ -379,7 +379,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
               <IconComponent className="w-5 h-5 text-brand-500 dark:text-gray-500" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-zinc-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-1">Entrada original</p>
+              <p className="text-zinc-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-1">{t("processing.originalEntry")}</p>
               <p className="text-zinc-700 dark:text-gray-400 text-sm whitespace-pre-wrap break-words line-clamp-6">
                 {rawPreview}
               </p>
@@ -391,14 +391,14 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
         <section className="rounded-2xl bg-zinc-50 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10 p-4 dark:bg-neutral-800 dark:border-blue-500/40 dark:shadow-blue-500/10">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-neutral-400 dark:bg-neutral-900/60 px-2 py-1 rounded-md">
-              Se guardará en: {getTypeLabel(currentItem)}
+              {t("processing.saveIn")} {getTypeLabel(currentItem, t)}
             </div>
             {isEditing ? (
               <button
                 type="button"
                 onClick={handleSaveEdit}
                 className="p-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors"
-                aria-label="Guardar cambios"
+                aria-label={t("common.saveChanges")}
               >
                 <Save className="w-4 h-4" />
               </button>
@@ -407,7 +407,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                 type="button"
                 onClick={handleStartEdit}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-white dark:hover:text-white transition-colors hover:bg-neutral-700/50"
-                aria-label="Editar"
+                aria-label={t("common.edit")}
               >
                 <Pencil className="w-4 h-4" />
               </button>
@@ -422,12 +422,12 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
                 className="w-full rounded-lg bg-neutral-900 text-white px-3 py-2 border border-neutral-700 text-sm outline-none focus:ring-2 focus:ring-brand-500/50 font-semibold"
-                placeholder="Título del ítem..."
+                placeholder={t("processing.itemTitlePlaceholder")}
                 maxLength={80}
               />
             ) : (
               <h3 className="text-xl font-bold text-zinc-900 dark:text-white leading-tight">
-                {editedTitle || getTypeLabel(currentItem)}
+                {editedTitle || getTypeLabel(currentItem, t)}
               </h3>
             )}
           </div>
@@ -439,7 +439,7 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
                 value={editedSummary}
                 onChange={(e) => setEditedSummary(e.target.value)}
                 className="w-full min-h-[100px] rounded-lg bg-neutral-900 text-white p-3 border border-neutral-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50"
-                placeholder="Edita el resumen..."
+                placeholder={t("processing.editSummaryPlaceholder")}
               />
             ) : (
               <p className="text-sm text-gray-600 dark:text-gray-300 italic leading-relaxed">
@@ -453,12 +453,12 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
               <CalendarPlus className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" aria-hidden />
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-blue-300 font-semibold uppercase tracking-wider mb-1">
-                  📅 Evento detectado
+                  📅 {t("processing.eventDetected")}
                 </p>
                 <p className="text-sm text-white font-medium">{currentItem.detectedEvent.title}</p>
                 <p className="text-xs text-neutral-400 mt-0.5">{currentItem.detectedEvent.date}</p>
                 <p className="text-[10px] text-neutral-500 mt-2">
-                  Se añadirá al calendario al Aprobar
+                  {t("processing.willAddToCalendar")}
                 </p>
               </div>
             </div>
@@ -468,14 +468,14 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
           {isEditing ? (
             <div>
               <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1.5">
-                Etiquetas (separadas por coma):
+                {t("processing.tagsLabel")}
               </p>
               <input
                 type="text"
                 value={topicsInput}
                 onChange={(e) => setTopicsInput(e.target.value)}
                 className="w-full rounded-lg bg-neutral-900 text-white px-3 py-2 border border-neutral-700 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
-                placeholder="ej: inteligencia artificial, react, tutorial"
+                placeholder={t("processing.tagsPlaceholder")}
               />
             </div>
           ) : (
@@ -503,24 +503,24 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
             type="button"
             onClick={handleDescartar}
             className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl border border-red-400/50 text-red-600 hover:bg-red-500/10 transition-colors dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
-            aria-label="Descartar"
+            aria-label={t("common.discard")}
           >
             <Trash2 className="w-6 h-6" />
-            <span className="text-xs font-medium">Descartar</span>
+            <span className="text-xs font-medium">{t("common.discard")}</span>
           </button>
           <button
             type="button"
             onClick={handleAprobar}
             disabled={processing}
             className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:pointer-events-none"
-            aria-label="Aprobar"
+            aria-label={t("common.approve")}
           >
             {processing ? (
               <Loader2 className="w-6 h-6 animate-spin" />
             ) : (
               <Check className="w-6 h-6" />
             )}
-          <span className="text-xs font-medium">{processing ? "Procesando…" : "Aprobar"}</span>
+          <span className="text-xs font-medium">{processing ? t("processing.processingLabel") : t("common.approve")}</span>
         </button>
       </footer>
     </div>

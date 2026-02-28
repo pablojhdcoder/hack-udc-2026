@@ -10,7 +10,9 @@ import ProcessScreen from "./components/Process/ProcessScreen";
 import VaultScreen from "./components/Vault/VaultScreen";
 import CalendarioView from "./components/Calendario/CalendarioView";
 import SettingsScreen from "./components/Settings/SettingsScreen";
+import CentroAyudaView from "./components/Settings/CentroAyudaView";
 import { getInbox, addToInbox } from "./api/client";
+import { useAppLanguage } from "./context/LanguageContext";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
@@ -46,6 +48,7 @@ function filterByDate(items, dateFilter) {
 }
 
 export default function App() {
+  const { t } = useAppLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [currentView, setCurrentView] = useState("inbox");
@@ -64,9 +67,7 @@ export default function App() {
   });
 
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: "ai", content: "¡Hola! Soy tu Cerebro Digital. ¿Qué necesitas encontrar o recordar hoy?" },
-  ]);
+  const [messages, setMessages] = useState([{ role: "ai", content: "__greeting__" }]);
   const [inputMessage, setInputMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -187,11 +188,23 @@ export default function App() {
     );
   }
 
+  if (currentView === "centro-ayuda") {
+    return (
+      <MobileFrame>
+        <CentroAyudaView
+          onBack={() => setCurrentView("ajustes")}
+          onContactEmail={() => window.open("mailto:soporte@ejemplo.com", "_blank")}
+        />
+      </MobileFrame>
+    );
+  }
+
   if (currentView === "ajustes") {
     return (
       <MobileFrame>
         <SettingsScreen
           onBack={() => setCurrentView("inbox")}
+          onHelpCenterClick={() => setCurrentView("centro-ayuda")}
           darkMode={darkMode}
           onDarkModeChange={setDarkMode}
         />
@@ -225,7 +238,7 @@ export default function App() {
           )}
           {loading ? (
             <div className="flex items-center justify-center py-12 text-zinc-600 dark:text-zinc-500 text-sm">
-              Cargando la fábrica de ideas…
+              {t("home.loadingInbox")}
             </div>
           ) : (
             <InboxList items={filteredItems} />
@@ -242,13 +255,13 @@ export default function App() {
             <header className="shrink-0 flex justify-between items-center p-4 border-b border-neutral-800">
               <div className="flex items-center gap-2">
                 <Brain className="w-5 h-5 text-blue-400" />
-                <h2 className="text-lg font-semibold text-white">Cerebro Digital</h2>
+                <h2 className="text-lg font-semibold text-white">{t("chat.title")}</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setIsChatOpen(false)}
                 className="p-2 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
-                aria-label="Cerrar chat"
+                aria-label={t("chat.closeChat")}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -263,12 +276,12 @@ export default function App() {
                       : "self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]"
                   }
                 >
-                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content === "__greeting__" ? t("chat.greeting") : msg.content}</p>
                 </div>
               ))}
               {chatLoading && (
                 <div className="self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]">
-                  <p className="text-sm text-neutral-400">Escribiendo...</p>
+                  <p className="text-sm text-neutral-400">{t("chat.typing")}</p>
                 </div>
               )}
             </div>
@@ -279,9 +292,9 @@ export default function App() {
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
-                  placeholder="Escribe tu mensaje..."
+                  placeholder={t("chat.placeholder")}
                   className="w-full bg-transparent text-white outline-none placeholder-neutral-500 py-1 text-sm"
-                  aria-label="Mensaje"
+                  aria-label={t("chat.messageLabel")}
                 />
               </div>
               <button
@@ -289,7 +302,7 @@ export default function App() {
                 onClick={handleSendMessage}
                 disabled={chatLoading || !inputMessage.trim()}
                 className="p-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white shrink-0 flex items-center justify-center disabled:opacity-50 disabled:pointer-events-none transition-colors"
-                aria-label="Enviar"
+                aria-label={t("common.send")}
               >
                 <Send className="w-5 h-5" />
               </button>

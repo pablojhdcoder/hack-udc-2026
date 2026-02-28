@@ -184,7 +184,7 @@ function Toast({ message, visible, onDismiss }) {
   );
 }
 
-export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChange }) {
+export default function SettingsScreen({ onBack, onHelpCenterClick, darkMode = true, onDarkModeChange }) {
   const { locale, t } = useAppLanguage();
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
   const [suggestionsOn, setSuggestionsOn] = useState(true);
@@ -240,6 +240,12 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               <ToggleSwitch on={suggestionsOn} onClick={() => setSuggestionsOn((v) => !v)} />
             </SettingsRow>
           </div>
+          <button type="button" onClick={() => setLanguageSheetOpen(true)} className={ROW_BASE + " text-left"}>
+            <SettingsRow icon={Globe} label={t("settings.appLanguage")}>
+              <span className="text-sm text-neutral-400">{selectedLanguageLabel}</span>
+              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
+            </SettingsRow>
+          </button>
         </SettingsGroup>
 
         <SettingsGroup title={t("settings.dataPrivacy")}>
@@ -267,12 +273,6 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button type="button" onClick={() => setLanguageSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Globe} label={t("settings.summaryLanguage")}>
-              <span className="text-sm text-neutral-400">{selectedLanguageLabel}</span>
-              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
-            </SettingsRow>
-          </button>
         </SettingsGroup>
 
         <SettingsGroup title={t("settings.supportAccount")}>
@@ -281,7 +281,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button type="button" onClick={() => setToastVisible(true)} className={ROW_BASE + " text-left"}>
+          <button type="button" onClick={() => onHelpCenterClick?.()} className={ROW_BASE + " text-left"}>
             <SettingsRow icon={HelpCircle} label={t("settings.helpCenter")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
@@ -363,10 +363,10 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
         isOpen={logoutModalOpen}
         onClose={() => setLogoutModalOpen(false)}
         onConfirm={() => {}}
-        title="¿Cerrar sesión?"
-        message="¿Seguro que quieres salir de tu Cerebro Digital?"
-        confirmLabel="Salir"
-        cancelLabel="Cancelar"
+        title={t("settings.logoutTitle")}
+        message={t("settings.confirmLogout")}
+        confirmLabel={t("settings.logoutConfirm")}
+        cancelLabel={t("common.cancel")}
         danger
       />
 

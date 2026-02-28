@@ -14,7 +14,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
         onKeyDown={(e) => e.key === "Escape" && onClose()}
         role="button"
         tabIndex={isOpen ? 0 : -1}
-        aria-label="Cerrar menú"
+        aria-label={t("common.closeMenu")}
         aria-hidden={!isOpen}
       />
       {/* Panel off-canvas: absolute dentro del marco, flota sobre el contenido */}
@@ -23,7 +23,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-modal="true"
-        aria-label="Menú lateral"
+        aria-label={t("common.sidebarMenu")}
         aria-hidden={!isOpen}
       >
         <div className="flex items-center justify-between h-14 px-4 border-b border-zinc-200 shrink-0 dark:border-zinc-800">
@@ -32,7 +32,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             type="button"
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-            aria-label="Cerrar"
+            aria-label={t("common.close")}
           >
             <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
           </button>
