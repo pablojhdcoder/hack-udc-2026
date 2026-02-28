@@ -37,7 +37,6 @@ function scoreItem(item, tokens) {
   const title   = lc(item.aiTitle ?? item.title ?? item.filename);
   const fname   = lc(item.filename ?? item.url ?? "");
   const cat     = lc(item.aiCategory);
-  const topic   = lc(item.topic);
   const tags    = (item.aiTags ?? []).map((t) => lc(t));
   const topics  = (item.aiTopics ?? []).map((t) => lc(t));
 
@@ -57,11 +56,7 @@ function scoreItem(item, tokens) {
       else if (tag.includes(token)) { tokenScore +=  8; matchedTokens.add(token); break; }
     }
 
-    // --- topic (campo DB) ---
-    if (topic === token)            { tokenScore += 15; matchedTokens.add(token); }
-    else if (topic.includes(token)) { tokenScore +=  8; matchedTokens.add(token); }
-
-    // --- aiTopics ---
+    // --- aiTopics (incluye el topic singular ya mezclado en el array) ---
     for (const t of topics) {
       if (t === token)            { tokenScore += 12; matchedTokens.add(token); break; }
       else if (t.includes(token)) { tokenScore +=  6; matchedTokens.add(token); break; }
@@ -164,10 +159,16 @@ router.get("/search", async (req, res) => {
 
     const normalizeAI = (raw) => {
       const ai = parseAI(raw);
+      const topicsArr = Array.isArray(ai?.topics) ? ai.topics : [];
+      const singular  = ai?.topic ?? null;
+      // Mezclar el topic singular en el array si no está ya incluido
+      const allTopics = singular && !topicsArr.some((t) => t?.toLowerCase() === singular.toLowerCase())
+        ? [singular, ...topicsArr]
+        : topicsArr;
       return {
         aiTitle:    ai?.title    ?? null,
-        aiTags:     Array.isArray(ai?.tags)   ? ai.tags   : [],
-        aiTopics:   Array.isArray(ai?.topics) ? ai.topics : [],
+        aiTags:     Array.isArray(ai?.tags) ? ai.tags : [],
+        aiTopics:   allTopics,
         aiCategory: ai?.category ?? null,
       };
     };

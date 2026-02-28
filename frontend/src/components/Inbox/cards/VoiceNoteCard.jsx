@@ -1,4 +1,5 @@
-import { Play, Mic } from "lucide-react";
+import { Play } from "lucide-react";
+import FilePreview from "../../shared/FilePreview";
 
 function formatDate(iso) {
   const d = new Date(iso);
@@ -20,9 +21,7 @@ export default function VoiceNoteCard({ item }) {
   return (
     <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-neutral-800/80 dark:border-neutral-700/50">
       <div className="flex gap-3 items-center">
-        <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-amber-400/10 flex items-center justify-center">
-          <Mic className="w-7 h-7 text-amber-400" />
-        </div>
+        <FilePreview item={item} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-zinc-600 dark:text-zinc-400 text-xs">Nota de voz</span>

@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+import FilePreview from "../../shared/FilePreview";
 
 function formatDate(iso) {
   const d = new Date(iso);
@@ -14,9 +14,7 @@ export default function TextNoteCard({ item }) {
   return (
     <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-neutral-800/80 dark:border-neutral-700/50">
       <div className="flex gap-3 items-center">
-        <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-emerald-400/10 flex items-center justify-center">
-          <FileText className="w-7 h-7 text-emerald-400" />
-        </div>
+        <FilePreview item={item} />
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm leading-snug line-clamp-3">{item.content}</p>
           {(item.topic || item.aiEnrichment?.tags?.length) && (
