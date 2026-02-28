@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
+import { Brain, Send, X } from "lucide-react";
 import MobileFrame from "./components/Layout/MobileFrame";
 import Header from "./components/Inbox/Header";
 import Sidebar from "./components/Inbox/Sidebar";
@@ -60,6 +61,40 @@ export default function App() {
       return true;
     }
   });
+
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { role: "ai", content: "¡Hola! Soy tu Cerebro Digital. ¿Qué necesitas encontrar o recordar hoy?" },
+  ]);
+  const [inputMessage, setInputMessage] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleSendMessage = useCallback(async () => {
+    const text = inputMessage.trim();
+    if (!text || chatLoading) return;
+    setInputMessage("");
+    const userMessage = { role: "user", content: text };
+    setMessages((prev) => [...prev, userMessage]);
+    setChatLoading(true);
+    const messagesWithUser = [...messages, userMessage];
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: messagesWithUser }),
+      });
+      const data = await res.json().catch(() => ({}));
+      const aiContent = data?.message ?? data?.content ?? "No pude generar una respuesta. Intenta de nuevo.";
+      setMessages((prev) => [...prev, { role: "ai", content: aiContent }]);
+    } catch {
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: "Error de conexión. Comprueba la red o intenta más tarde." },
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  }, [messages, inputMessage, chatLoading]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -167,10 +202,11 @@ export default function App() {
         onDateFilter={setDateFilter}
       />
 
-      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
         <Header
           onMenuClick={() => setSidebarOpen(true)}
           onFilterClick={() => setFilterSheetOpen(true)}
+          onChatClick={() => setIsChatOpen(true)}
         />
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-4 scrollbar-hide">
           {error && (
@@ -180,7 +216,7 @@ export default function App() {
           )}
           {loading ? (
             <div className="flex items-center justify-center py-12 text-zinc-600 dark:text-zinc-500 text-sm">
-              Cargando la fábrica de las ideas…
+              Cargando la fábrica de ideas…
             </div>
           ) : (
             <InboxList items={filteredItems} />
@@ -191,6 +227,66 @@ export default function App() {
           onProcessClick={() => setCurrentView("procesando")}
           onAdd={handleAddToInbox}
         />
+
+        {isChatOpen && (
+          <div className="absolute inset-0 z-50 bg-neutral-950 flex flex-col">
+            <header className="shrink-0 flex justify-between items-center p-4 border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5 text-blue-400" />
+                <h2 className="text-lg font-semibold text-white">Cerebro Digital</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsChatOpen(false)}
+                className="p-2 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+                aria-label="Cerrar chat"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </header>
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+              {messages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={
+                    msg.role === "user"
+                      ? "self-end bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%]"
+                      : "self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]"
+                  }
+                >
+                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]">
+                  <p className="text-sm text-neutral-400">Escribiendo...</p>
+                </div>
+              )}
+            </div>
+            <footer className="shrink-0 p-3 bg-neutral-950 border-t border-neutral-800 flex items-center gap-2">
+              <div className="flex-1 flex items-center bg-neutral-900 border border-neutral-800 rounded-full px-4 py-2">
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                  placeholder="Escribe tu mensaje..."
+                  className="w-full bg-transparent text-white outline-none placeholder-neutral-500 py-1 text-sm"
+                  aria-label="Mensaje"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleSendMessage}
+                disabled={chatLoading || !inputMessage.trim()}
+                className="p-2.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white shrink-0 flex items-center justify-center disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                aria-label="Enviar"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </footer>
+          </div>
+        )}
       </div>
     </MobileFrame>
   );
