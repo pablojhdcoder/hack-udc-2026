@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X } from "lucide-react";
 import {
   getVaultFolders,
@@ -49,18 +49,6 @@ function formatDate(iso) {
   return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
-function filterVaultItems(items, query) {
-  if (!query || !query.trim()) return items;
-  const q = query.trim().toLowerCase();
-  return items.filter((item) => {
-    const title = item.title ?? item.filename ?? "";
-    const content = item.content ?? "";
-    const url = item.url ?? "";
-    const path = item.processedPath ?? "";
-    return title.toLowerCase().includes(q) || content.toLowerCase().includes(q) || url.toLowerCase().includes(q) || path.toLowerCase().includes(q);
-  });
-}
-
 export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [folders, setFolders] = useState([]);
   const [recent, setRecent] = useState([]);
@@ -80,8 +68,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [fullNoteContent, setFullNoteContent] = useState(null);
   const [loadingNote, setLoadingNote] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchInputValue, setSearchInputValue] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef(null);
   const lastOpenedKeyRef = useRef(null);
   const initialAppliedRef = useRef(false);
@@ -301,24 +290,42 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
 
   const selectedLabel = selectedKind ? (KIND_LABEL[selectedKind] || selectedKind) : null;
 
-  const filteredRecent = useMemo(() => filterVaultItems(recent, searchQuery), [recent, searchQuery]);
-  const filteredWeeklyWrapped = useMemo(() => filterVaultItems(weeklyWrapped, searchQuery), [weeklyWrapped, searchQuery]);
-  const filteredItemsByKind = useMemo(() => filterVaultItems(itemsByKind, searchQuery), [itemsByKind, searchQuery]);
-
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
+  // Búsqueda por topic/filename en backend: debounce 500ms → fetch /api/search?q=
+  useEffect(() => {
+    const q = searchTerm.trim();
+    if (!q) {
+      setSearchResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        if (!res.ok) throw new Error("Error en búsqueda");
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
   const handleCloseSearch = useCallback(() => {
+    setSearchTerm("");
+    setSearchResults([]);
     setSearchOpen(false);
-    setSearchInputValue("");
-    setSearchQuery("");
   }, []);
 
   const handleBuscar = useCallback(() => {
-    setSearchQuery(searchInputValue.trim());
     setSearchOpen(false);
-  }, [searchInputValue]);
+  }, []);
 
   const openItemUrl = useCallback(() => {
     if (!selectedItem) return;
@@ -364,14 +371,10 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             <input
               ref={searchInputRef}
               type="search"
-              value={searchInputValue}
-              onChange={(e) => {
-                const v = e.target.value;
-                setSearchInputValue(v);
-                setSearchQuery(v.trim());
-              }}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-              placeholder="Buscar en el baúl..."
+              placeholder="Buscar en el baúl (por nombre o tema)..."
               className="flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
               aria-label="Buscar"
             />
@@ -477,13 +480,11 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
               <p className="text-zinc-500 text-sm">Cargando…</p>
             </div>
-          ) : filteredItemsByKind.length === 0 ? (
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">
-              {searchQuery.trim() ? "No hay resultados para la búsqueda." : "No hay ítems en esta carpeta."}
-            </p>
+          ) : itemsByKind.length === 0 ? (
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No hay ítems en esta carpeta.</p>
           ) : (
             <ul className="space-y-2">
-              {filteredItemsByKind.map((item) => {
+              {itemsByKind.map((item) => {
                 const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
                 const displayName = item.filename ?? item.title ?? item.url?.slice(0, 40) ?? (item.content?.slice(0, 50) || "Sin título");
                 const statusLabel = item.kind === "favorite"
@@ -515,6 +516,52 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
             <p className="text-zinc-500 text-sm">Cargando carpetas…</p>
+          </div>
+        ) : searchTerm.trim() ? (
+          <div className="flex-1 min-h-0 flex flex-col">
+            {searchLoading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm">Buscando en tu cerebro digital…</p>
+              </div>
+            ) : searchResults.length === 0 ? (
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No se han encontrado resultados.</p>
+            ) : (
+              <ul className="space-y-2">
+                {searchResults.map((item) => {
+                  const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
+                  const displayName = item.filename ?? item.title ?? "Sin nombre";
+                  return (
+                    <li key={`search-${item.kind ?? "item"}-${item.id}`}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedItem(item)}
+                        className="w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+                      >
+                        {item.thumbnailUrl ? (
+                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex-shrink-0">
+                            <img src={item.thumbnailUrl} alt="" className="w-12 h-12 object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                            <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
+                          {item.topic && (
+                            <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full w-max mt-1 inline-block dark:bg-blue-500/20 dark:text-blue-300">
+                              {item.topic}
+                            </span>
+                          )}
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         ) : (
           <>
@@ -548,7 +595,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               </div>
             </section>
 
-            {(weeklyWrapped.length > 0 || searchQuery.trim()) && (
+            {weeklyWrapped.length > 0 && (
               <section>
                 <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
                   Tus hits de la semana
@@ -556,11 +603,8 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-3">
                   Lo que más has abierto en los últimos 7 días
                 </p>
-                {filteredWeeklyWrapped.length === 0 ? (
-                  <p className="text-zinc-500 dark:text-zinc-400 text-sm py-2">No hay resultados para la búsqueda.</p>
-                ) : (
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide snap-x snap-mandatory">
-                  {filteredWeeklyWrapped.map((item, idx) => {
+                  {weeklyWrapped.map((item, idx) => {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
                     const displayName = item.filename ?? item.title ?? item.url?.slice(0, 30) ?? (item.content?.slice(0, 30) || "Sin título");
                     return (
@@ -584,7 +628,6 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     );
                   })}
                 </div>
-                )}
               </section>
             )}
 
@@ -592,13 +635,11 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
                 Procesados recientes
               </h2>
-              {filteredRecent.length === 0 ? (
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">
-                  {searchQuery.trim() ? "No hay resultados para la búsqueda." : "Aún no hay ítems procesados."}
-                </p>
+              {recent.length === 0 ? (
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">Aún no hay ítems procesados.</p>
               ) : (
                 <ul className="space-y-2">
-                  {filteredRecent.map((item) => {
+                  {recent.map((item) => {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
                     return (
                       <li key={`${item.kind}-${item.id}`}>
