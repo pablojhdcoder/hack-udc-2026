@@ -4,6 +4,7 @@ import {
   getVaultFolders,
   getProcessedRecent,
   getNovelties,
+  getWeeklyWrapped,
   markOpened,
   getInboxByKind,
   getFavorites,
@@ -51,6 +52,7 @@ function formatDate(iso) {
 export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [folders, setFolders] = useState([]);
   const [recent, setRecent] = useState([]);
+  const [weeklyWrapped, setWeeklyWrapped] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedKind, setSelectedKind] = useState(null);
@@ -72,16 +74,19 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     setLoading(true);
     setError(null);
     try {
-      const [foldersRes, recentRes] = await Promise.all([
+      const [foldersRes, recentRes, weeklyRes] = await Promise.all([
         getVaultFolders(),
         getProcessedRecent(5),
+        getWeeklyWrapped(15),
       ]);
       setFolders(Array.isArray(foldersRes.folders) ? foldersRes.folders : []);
       setRecent(Array.isArray(recentRes) ? recentRes : []);
+      setWeeklyWrapped(Array.isArray(weeklyRes) ? weeklyRes : []);
     } catch (err) {
       setError(err?.message ?? "Error al cargar");
       setFolders([]);
       setRecent([]);
+      setWeeklyWrapped([]);
     } finally {
       setLoading(false);
     }
@@ -453,6 +458,42 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 })}
               </div>
             </section>
+
+            {weeklyWrapped.length > 0 && (
+              <section>
+                <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
+                  Tus hits de la semana
+                </h2>
+                <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-3">
+                  Lo que más has abierto en los últimos 7 días
+                </p>
+                <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide snap-x snap-mandatory">
+                  {weeklyWrapped.map((item, idx) => {
+                    const Icon = ICON_BY_KIND[item.kind] ?? FileText;
+                    const displayName = item.filename ?? item.title ?? item.url?.slice(0, 30) ?? (item.content?.slice(0, 30) || "Sin título");
+                    return (
+                      <button
+                        key={`wrapped-${item.kind}-${item.id}`}
+                        type="button"
+                        onClick={() => setSelectedItem(item)}
+                        className="flex-shrink-0 w-36 snap-center rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 dark:from-emerald-500/15 dark:to-teal-500/15 border border-emerald-200/60 dark:border-emerald-700/50 p-3 text-left hover:from-emerald-500/25 hover:to-teal-500/25 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{idx + 1}</span>
+                          <div className="w-8 h-8 rounded-lg bg-emerald-500/20 dark:bg-emerald-500/30 flex items-center justify-center">
+                            <Icon className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          </div>
+                        </div>
+                        <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate leading-tight">{displayName}</p>
+                        <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-1">
+                          {item.openedCount} {item.openedCount === 1 ? "apertura" : "aperturas"} esta semana
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             <section>
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
