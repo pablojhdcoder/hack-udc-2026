@@ -11,7 +11,7 @@ import VaultScreen from "./components/Vault/VaultScreen";
 import CalendarioView from "./components/Calendario/CalendarioView";
 import SettingsScreen from "./components/Settings/SettingsScreen";
 import CentroAyudaView from "./components/Settings/CentroAyudaView";
-import { getInbox, addToInbox } from "./api/client";
+import { getInbox, addToInbox, discardItem } from "./api/client";
 import { useAppLanguage } from "./context/LanguageContext";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
@@ -167,6 +167,15 @@ export default function App() {
     }
   }, [loadingProcessData, filteredItems.length]);
 
+  const handleDiscardFromInbox = useCallback(async (kind, id) => {
+    try {
+      await discardItem(kind, id);
+      setItems((prev) => prev.filter((i) => !(i.kind === kind && i.id === id)));
+    } catch (err) {
+      setError(err?.message ?? "Error al eliminar");
+    }
+  }, []);
+
   if (currentView === "procesando") {
     return (
       <MobileFrame>
@@ -264,7 +273,7 @@ export default function App() {
               <span>{loadingProcessData ? t("home.preparingProcess") : t("home.loadingInbox")}</span>
             </div>
           ) : (
-            <InboxList items={filteredItems} />
+            <InboxList items={filteredItems} onDiscardItem={handleDiscardFromInbox} />
           )}
         </main>
         <FooterCapture

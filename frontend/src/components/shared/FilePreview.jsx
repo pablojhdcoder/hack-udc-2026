@@ -43,11 +43,13 @@ function PlayOverlay() {
  */
 export default function FilePreview({ item }) {
   const [imgError, setImgError] = useState(false);
+  // En favoritos item.kind es "favorite"; usar sourceKind para la preview real (photo, video, link, etc.)
   const kind = item?.kind ?? item?.sourceKind ?? "file";
+  const previewKind = kind === "favorite" ? (item?.sourceKind ?? "file") : kind;
   const type = (item?.type ?? item?.fileType ?? "").toLowerCase();
   const isImageType = type === "image" || type === "photo";
-  const isPhoto = kind === "photo" || (kind === "file" && isImageType);
-  const isVideo = kind === "video";
+  const isPhoto = previewKind === "photo" || (previewKind === "file" && isImageType);
+  const isVideo = previewKind === "video";
   const linkUrl = item?.url ?? null;
   const videoSourceUrl = isVideo ? (item?.url || item?.filePath || "") : linkUrl;
   const youtubeId = getYouTubeVideoId(videoSourceUrl);
@@ -64,7 +66,7 @@ export default function FilePreview({ item }) {
   const showPhotoImg = isPhoto && photoThumbUrl && !imgError;
   const showVideoThumb = (isVideo || isYouTube) && videoThumbUrl && !imgError;
 
-  const style = ICON_STYLE_BY_KIND[kind] ?? ICON_STYLE_BY_KIND.file;
+  const style = ICON_STYLE_BY_KIND[previewKind] ?? ICON_STYLE_BY_KIND.file;
   const { Icon, text, bg } = style;
 
   if (showVideoThumb) {

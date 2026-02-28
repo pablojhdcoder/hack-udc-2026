@@ -46,6 +46,7 @@ model Photo {
 model Audio {
   id             String   @id @default(cuid())
   filePath       String
+  filename       String?  // nombre original del archivo
   type           String   // voice_note, podcast, ...
   duration       Int?     // segundos
   transcription  String?

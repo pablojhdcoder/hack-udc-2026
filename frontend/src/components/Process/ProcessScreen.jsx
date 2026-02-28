@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ArrowLeft,
   CalendarPlus,
@@ -14,6 +14,8 @@ import {
   Check,
   Save,
   X,
+  Play,
+  Pause,
 } from "lucide-react";
 import { getInbox, processItems, discardItem, updateInboxEnrichment } from "../../api/client";
 import { useAppLanguage } from "../../context/LanguageContext";
@@ -59,14 +61,23 @@ function hasRealEnrichment(item) {
   return !!summary && String(summary).trim().length > 0;
 }
 
-/** Extrae el título de la IA del ítem (aiEnrichment.title). */
+/** Extrae el título de la IA del ítem (aiEnrichment.title o aiTitle). Solo título IA; filename es fallback aparte. */
 function getAITitle(item) {
+  if (item?.aiTitle && String(item.aiTitle).trim()) return String(item.aiTitle).trim();
   if (!item?.aiEnrichment) return null;
   try {
     const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
     if (data?.title) return String(data.title).trim();
   } catch {}
   return null;
+}
+
+/** Título a mostrar: primero título IA (aiEnrichment), solo si no hay usa filename. */
+function getDisplayTitle(item, fallbackLabel) {
+  const ai = getAITitle(item);
+  if (ai) return ai;
+  if (item?.filename && String(item.filename).trim()) return item.filename;
+  return fallbackLabel ?? "";
 }
 
 /** Topics del ítem para las píldoras (#topic). Lee del nuevo formato aiEnrichment. */
@@ -85,8 +96,81 @@ function getRawPreview(item, t) {
   if (item.content) return item.content;
   if (item.url) return item.title ? `${item.title}\n${item.url}` : item.url;
   if (item.filename) return item.filename;
-  if (item.kind === "audio") return t("common.voiceNote");
+  if (item.kind === "audio") {
+    const aiTitle = getAITitle(item);
+    return aiTitle || t("common.voiceNote");
+  }
   return t("common.noContent");
+}
+
+/** URL para preview de imagen en /api/uploads (mismo criterio que FilePreview). */
+function buildUploadThumbUrl(filePath) {
+  if (!filePath || typeof filePath !== "string") return null;
+  const normalized = String(filePath).trim().replace(/\\/g, "/");
+  const basename = normalized.split("/").pop();
+  return basename ? `/api/uploads/${basename}` : null;
+}
+
+function AudioPlayerInline({ filePath, durationSeconds }) {
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(durationSeconds || 0);
+  const audioRef = useRef(null);
+
+  const audioUrl = (() => {
+    if (!filePath) return null;
+    const normalized = String(filePath).trim().replace(/\\/g, "/");
+    const basename = normalized.split("/").pop();
+    return basename ? `/api/uploads/${basename}` : null;
+  })();
+
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
+
+  const formatDur = (s) => {
+    if (!s || s <= 0) return null;
+    return `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
+  };
+
+  const handlePlayPause = () => {
+    if (!audioRef.current || !audioUrl) return;
+    if (playing) { audioRef.current.pause(); setPlaying(false); }
+    else { audioRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false)); }
+  };
+
+  const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
+  const durLabel = formatDur(audioDuration);
+
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <button
+        type="button"
+        onClick={handlePlayPause}
+        disabled={!audioUrl}
+        className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center hover:bg-brand-600 transition-colors disabled:opacity-40"
+        aria-label={playing ? "Pausar" : "Reproducir"}
+      >
+        {playing
+          ? <Pause className="w-3.5 h-3.5 text-white" fill="currentColor" />
+          : <Play className="w-3.5 h-3.5 text-white ml-0.5" fill="currentColor" />
+        }
+      </button>
+      <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-600 overflow-hidden">
+        <div className="h-full rounded-full bg-brand-500 transition-all duration-100" style={{ width: `${progress}%` }} />
+      </div>
+      {durLabel && <span className="text-xs text-zinc-500 flex-shrink-0">{durLabel}</span>}
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+          onLoadedMetadata={() => { if (audioRef.current?.duration) setAudioDuration(Math.round(audioRef.current.duration)); }}
+          onEnded={() => { setPlaying(false); setCurrentTime(0); if (audioRef.current) audioRef.current.currentTime = 0; }}
+          onPause={() => setPlaying(false)}
+          preload="metadata"
+        />
+      )}
+    </div>
+  );
 }
 
 export default function ProcessScreen({ initialItems, onBack, onProcessDone, onOpenVault }) {
@@ -102,7 +186,8 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
   const [processing, setProcessing] = useState(false);
   const [processError, setProcessError] = useState(null);
   const [successInfo, setSuccessInfo] = useState(null);
-
+  const [processedCount, setProcessedCount] = useState(0);
+  const [initialTotal, setInitialTotal] = useState(null);
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
@@ -127,11 +212,17 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
   }, [loadInbox, initialItems]);
 
   useEffect(() => {
+    if (items.length > 0 && initialTotal === null) {
+      setInitialTotal(items.length);
+    }
+  }, [items.length, initialTotal]);
+
+  useEffect(() => {
     const item = items[currentIndex];
     const title = item ? getAITitle(item) : null;
     const summary = item ? getAISummary(item) : null;
     const topics = item ? getItemTopics(item) : [];
-    setEditedTitle(title || "");
+    setEditedTitle(title || (item?.filename ?? "") || "");
     setEditedSummary(summary || t("processing.aiSummaryFallback"));
     setEditedTopics(topics);
     setTopicsInput(topics.join(", "));
@@ -140,7 +231,8 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
 
   const currentItem = items[currentIndex];
   const total = items.length;
-  const progress = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
+  const totalForProgress = initialTotal ?? total;
+  const progress = totalForProgress > 0 ? (processedCount / totalForProgress) * 100 : 0;
 
   const isAnalyzing = currentItem && !hasRealEnrichment(currentItem);
 
@@ -180,6 +272,22 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
       setProcessError(err?.message ?? t("processing.errorDiscard"));
     }
   };
+
+  /** Quitar un ítem de la cola de procesado (solo en esta sesión; no borra en backend). */
+  const handleRemoveFromQueue = useCallback((index) => {
+    setItems((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) onBack?.();
+      return next;
+    });
+    setCurrentIndex((prev) => {
+      const nextLength = items.length - 1;
+      if (nextLength <= 0) return 0;
+      if (index < prev) return prev - 1;
+      if (index === prev && prev >= nextLength) return Math.max(0, nextLength - 1);
+      return prev;
+    });
+  }, [items.length, onBack]);
 
   const handleSaveEdit = () => {
     const parsed = topicsInput.split(",").map((t) => t.trim()).filter(Boolean);
@@ -231,6 +339,7 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
         kind,
         id,
       });
+      setProcessedCount((c) => c + 1);
       onProcessDone?.();
       await loadInbox();
     } catch (err) {
@@ -387,7 +496,9 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
           </button>
           <div className="flex-1 flex flex-col items-center justify-center py-1">
             <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm">
-              {t("processing.processingCount", { current: currentIndex + 1, total })}
+              {totalForProgress > 0
+                ? t("processing.processedOfTotal", { count: processedCount, total: totalForProgress })
+                : t("processing.processedCountOnly", { count: processedCount })}
             </p>
             <div className="w-32 h-1.5 mt-1 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
               <div
@@ -398,9 +509,45 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
           </div>
           <div className="w-10" />
         </div>
+        {items.length > 0 && (
+          <div className="px-2 pb-2 overflow-x-auto overflow-y-hidden">
+            <div className="flex gap-1.5 justify-start min-w-min py-1">
+              {items.map((item, idx) => {
+                const Icon = ICON_BY_KIND[item.kind] ?? FileText;
+                const label = getRawPreview(item, t).slice(0, 20) + (getRawPreview(item, t).length > 20 ? "…" : "");
+                const isCurrent = idx === currentIndex;
+                return (
+                  <div
+                    key={`${item.kind}-${item.id}-${idx}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setCurrentIndex(idx)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setCurrentIndex(idx); } }}
+                    className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1.5 text-xs flex-shrink-0 cursor-pointer touch-manipulation ${
+                      isCurrent
+                        ? "bg-brand-500/10 border-brand-500/40 text-zinc-900 dark:text-zinc-100 ring-1 ring-brand-500/50"
+                        : "bg-zinc-100 border-zinc-200 text-zinc-600 dark:bg-neutral-800 dark:border-neutral-700 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-neutral-700"
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="truncate max-w-[80px]">{label}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); e.preventDefault(); handleRemoveFromQueue(idx); }}
+                      className="p-0.5 rounded hover:bg-red-500/20 text-red-500 dark:text-red-400 flex-shrink-0"
+                      aria-label={t("common.discard")}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 space-y-6 py-5 pb-4 scrollbar-hide">
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 space-y-6 py-5 pb-4 scrollbar-hide touch-pan-y">
         {processError && (
           <div className="rounded-xl bg-red-500/20 text-red-700 dark:text-red-300 px-4 py-3 text-sm">
             {processError}
@@ -409,15 +556,42 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
         {/* 2. Tarjeta Entrada Original (secundaria) */}
         <section className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 dark:bg-neutral-800/40 dark:border-neutral-700/50">
           <div className="flex gap-3">
-            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-500/10 dark:bg-neutral-700/60 flex items-center justify-center">
-              <IconComponent className="w-5 h-5 text-brand-500 dark:text-gray-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-zinc-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-1">{t("processing.originalEntry")}</p>
-              <p className="text-zinc-700 dark:text-gray-400 text-sm whitespace-pre-wrap break-words line-clamp-6">
-                {rawPreview}
-              </p>
-            </div>
+            {(() => {
+              const isPhoto = currentItem?.kind === "photo";
+              const isImageFile = currentItem?.kind === "file" && (currentItem?.type === "image" || currentItem?.fileType === "image" || currentItem?.fileType === "photo");
+              const thumbUrl = (isPhoto || isImageFile) && currentItem?.filePath ? buildUploadThumbUrl(currentItem.filePath) : null;
+              if (thumbUrl) {
+                return (
+                  <>
+                    <div className="flex-shrink-0 w-24 h-24 rounded-xl overflow-hidden bg-zinc-200 dark:bg-neutral-700 border border-zinc-200 dark:border-neutral-600">
+                      <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-zinc-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-1">{t("processing.originalEntry")}</p>
+                      <p className="text-zinc-700 dark:text-gray-400 text-sm whitespace-pre-wrap break-words line-clamp-4">
+                        {rawPreview}
+                      </p>
+                    </div>
+                  </>
+                );
+              }
+              return (
+                <>
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-500/10 dark:bg-neutral-700/60 flex items-center justify-center">
+                    <IconComponent className="w-5 h-5 text-brand-500 dark:text-gray-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-zinc-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-1">{t("processing.originalEntry")}</p>
+                    <p className="text-zinc-700 dark:text-gray-400 text-sm whitespace-pre-wrap break-words line-clamp-6">
+                      {rawPreview}
+                    </p>
+                    {currentItem?.kind === "audio" && currentItem?.filePath && (
+                      <AudioPlayerInline filePath={currentItem.filePath} durationSeconds={currentItem.durationSeconds} />
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </section>
 
@@ -470,7 +644,7 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
                   />
                 ) : (
                   <h3 className="text-xl font-bold text-zinc-900 dark:text-white leading-tight">
-                    {editedTitle || getTypeLabel(currentItem, t)}
+                    {getDisplayTitle(currentItem, getTypeLabel(currentItem, t))}
                   </h3>
                 )}
               </div>

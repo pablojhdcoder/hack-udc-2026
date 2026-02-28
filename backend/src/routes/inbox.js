@@ -12,6 +12,16 @@ import {
   enrichAudio,
   enrichVideo,
 } from "../services/aiService.js";
+import { parseFile as parseAudioMetadata } from "music-metadata";
+
+async function getAudioDurationSeconds(filePath) {
+  try {
+    const metadata = await parseAudioMetadata(filePath);
+    return metadata.format.duration ? Math.round(metadata.format.duration) : null;
+  } catch {
+    return null;
+  }
+}
 
 const router = Router();
 
@@ -68,9 +78,9 @@ async function runPhotoEnrichment(id, filePath, type, filename) {
   }
 }
 
-async function runVideoEnrichment(id, filename, type) {
+async function runVideoEnrichment(id, filePath, filename, type) {
   try {
-    const enrichment = await enrichVideo(filename, type);
+    const enrichment = await enrichVideo(filePath, filename, type);
     await saveEnrichment(prisma.video, id, enrichment);
   } catch (err) {
     console.error(`[AI] Error enriqueciendo vídeo ${id}:`, err.message);
@@ -111,13 +121,36 @@ router.post("/", optionalMulter, async (req, res) => {
       const relativePath = path.relative(process.cwd(), req.file.path).replace(/\\/g, "/");
 
       if (kind === "audio") {
-        const audio = await prisma.audio.create({
-          data: {
-            filePath: relativePath,
-            type: type || "audio",
-            inboxStatus: "pending",
-          },
-        });
+        const audioDuration = await getAudioDurationSeconds(req.file.path);
+        const originalFilename = req.file.originalname;
+        let audio;
+        try {
+          audio = await prisma.audio.create({
+            data: {
+              filePath: relativePath,
+              filename: originalFilename,
+              type: type || "audio",
+              duration: audioDuration,
+              inboxStatus: "pending",
+            },
+          });
+        } catch {
+          // Fallback: Prisma client may not have filename field yet (needs prisma generate after restart)
+          audio = await prisma.audio.create({
+            data: {
+              filePath: relativePath,
+              type: type || "audio",
+              duration: audioDuration,
+              inboxStatus: "pending",
+            },
+          });
+          // Update filename via raw SQL to bypass stale Prisma client
+          await prisma.$executeRawUnsafe(
+            `UPDATE "Audio" SET "filename" = ? WHERE "id" = ?`,
+            originalFilename,
+            audio.id
+          );
+        }
 
         if (aiActive) {
           console.log("[AI] Enriqueciendo audio", audio.id);
@@ -128,7 +161,9 @@ router.post("/", optionalMulter, async (req, res) => {
           kind: "audio",
           id: audio.id,
           type: audio.type,
+          filename: originalFilename,
           filePath: audio.filePath,
+          durationSeconds: audioDuration ?? 0,
           createdAt: audio.createdAt,
           inboxStatus: "pending",
           aiEnrichmentPending: aiActive,
@@ -146,7 +181,7 @@ router.post("/", optionalMulter, async (req, res) => {
 
         if (aiActive) {
           console.log("[AI] Enriqueciendo vídeo", video.id);
-          runVideoEnrichment(video.id, req.file.originalname, video.type).catch((e) => console.error("[AI] Video enrichment catch:", e.message));
+          runVideoEnrichment(video.id, req.file.path, req.file.originalname, video.type).catch((e) => console.error("[AI] Video enrichment catch:", e.message));
         }
 
         return res.status(201).json({
@@ -476,7 +511,7 @@ router.get("/novelties", async (req, res) => {
             const thumbnailUrl = toUploadUrl(filePath);
             return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
           }
-          if (k === "audio") return { ...base, filename: ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath };
+          if (k === "audio") return { ...base, filename: item.filename || ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
           if (k === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath };
           return base;
         });
@@ -539,6 +574,12 @@ router.get("/wrapped/weekly", async (req, res) => {
       }, {});
     }
 
+    const normalizeAIEnrichment = (raw) => {
+      const ai = parseAI(raw);
+      const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+      return { aiTitle: ai?.title ?? null, aiSummary: ai?.summary ?? null, aiLanguage: ai?.language ?? null, aiCategory: ai?.category ?? null, aiTopics: topics, aiTags: topics };
+    };
+
     const unified = [];
     for (const v of views) {
       if (!modelMap[v.kind]) continue;
@@ -546,6 +587,7 @@ router.get("/wrapped/weekly", async (req, res) => {
       if (!entity) continue;
       if (entity.inboxStatus !== "processed") continue;
 
+      const ai = normalizeAIEnrichment(entity.aiEnrichment);
       const base = {
         kind: v.kind,
         id: v.sourceId,
@@ -555,11 +597,12 @@ router.get("/wrapped/weekly", async (req, res) => {
         createdAt: entity.createdAt,
         openedCount: v.openedCount,
         lastOpenedAt: v.lastOpenedAt,
+        ...ai,
       };
       if (v.kind === "link") {
         unified.push({ ...base, url: entity.url, type: entity.type });
       } else if (v.kind === "note") {
-        unified.push({ ...base, content: (entity.content || "").slice(0, 200), type: entity.type });
+        unified.push({ ...base, content: (entity.content || "").slice(0, 200), filename: (entity.content || "").slice(0, 80) || "Nota", type: entity.type });
       } else if (v.kind === "file" || v.kind === "photo") {
         unified.push({
           ...base,
@@ -568,10 +611,14 @@ router.get("/wrapped/weekly", async (req, res) => {
           filePath: entity.filePath,
         });
       } else if (v.kind === "audio" || v.kind === "video") {
+        const filenameAudio = v.kind === "audio" ? (entity.filename || ai.aiTitle || path.basename(entity.filePath || "") || "Audio") : (entity.title || ai.aiTitle || path.basename(entity.filePath || "") || "Vídeo");
         unified.push({
           ...base,
+          filename: filenameAudio,
+          title: entity.title ?? null,
           type: entity.type,
           filePath: entity.filePath,
+          durationSeconds: entity.duration ?? 0,
         });
       } else {
         unified.push(base);
@@ -637,7 +684,7 @@ router.get("/processed/recent", async (req, res) => {
       ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), filename: item.title || item.url?.slice(0, 50) || "Enlace", url: item.url, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
-      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: item.filename || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, durationSeconds: item.duration ?? 0, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
     ]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -696,8 +743,8 @@ router.get("/by-kind/:kind", async (req, res) => {
       }
       if (kind === "link") return { ...base, url: item.url, type: item.type };
       if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), filename: (item.content || "").slice(0, 80) || "Nota", type: item.type };
-      if (kind === "audio") return { ...base, filename: ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath };
-      if (kind === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath };
+      if (kind === "audio") return { ...base, filename: item.filename || ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
+      if (kind === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
       return base;
     });
     res.json(list);
@@ -725,7 +772,6 @@ function copyToFavorite(item, kind) {
     duration: item.duration ?? null,
     transcription: item.transcription ?? null,
     metadata: item.metadata ?? null,
-    topic: item.topic ?? null,
     aiEnrichment: item.aiEnrichment ?? null,
     inboxStatus: item.inboxStatus ?? null,
     processedPath: item.processedPath ?? null,
@@ -735,22 +781,31 @@ function copyToFavorite(item, kind) {
 router.get("/favorites", async (req, res) => {
   try {
     const list = await prisma.favorite.findMany({ orderBy: { createdAt: "desc" } });
+    const normalizeAI = (raw) => {
+      const ai = parseAI(raw);
+      const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+      return { aiTitle: ai?.title ?? null, aiSummary: ai?.summary ?? null, aiLanguage: ai?.language ?? null, aiCategory: ai?.category ?? null, aiTopics: topics, aiTags: topics };
+    };
     res.json(
-      list.map((f) => ({
-        kind: "favorite",
-        id: f.id,
-        sourceKind: f.kind,
-        sourceId: f.sourceId,
-        title: f.title ?? f.filename ?? f.url?.slice(0, 40) ?? "Favorito",
-        filename: f.filename,
-        filePath: f.filePath,
-        url: f.url,
-        content: f.content,
-        type: f.type,
-        inboxStatus: f.inboxStatus,
-        processedPath: f.processedPath,
-        createdAt: f.createdAt,
-      }))
+      list.map((f) => {
+        const ai = normalizeAI(f.aiEnrichment);
+        return {
+          kind: "favorite",
+          id: f.id,
+          sourceKind: f.kind,
+          sourceId: f.sourceId,
+          title: f.title ?? f.filename ?? f.url?.slice(0, 40) ?? "Favorito",
+          filename: f.filename,
+          filePath: f.filePath,
+          url: f.url,
+          content: f.content,
+          type: f.type,
+          inboxStatus: f.inboxStatus,
+          processedPath: f.processedPath,
+          createdAt: f.createdAt,
+          ...ai,
+        };
+      })
     );
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -844,12 +899,14 @@ router.get("/", async (req, res) => {
       ...withKind(videos, "video"),
     ]
       .map((item) => {
+        const ai = parseAI(item.aiEnrichment);
         const base = {
           kind: item.kind,
           id: item.id,
           type: item.type,
           createdAt: item.createdAt,
-          aiEnrichment: parseAI(item.aiEnrichment),
+          aiEnrichment: ai,
+          aiTitle: ai?.title ?? null,
         };
         if (item.kind === "link") {
           let metadata = null;
@@ -864,7 +921,7 @@ router.get("/", async (req, res) => {
         if (item.kind === "photo")
           return { ...base, filename: item.filename, filePath: item.filePath, fileType: item.type };
         if (item.kind === "audio")
-          return { ...base, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
+          return { ...base, filename: item.filename || null, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
         if (item.kind === "video")
           return {
             ...base,

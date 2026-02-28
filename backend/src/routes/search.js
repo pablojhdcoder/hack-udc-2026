@@ -100,31 +100,18 @@ function scoreItem(item, tokens) {
   return Math.round(totalScore);
 }
 
+const VALID_KINDS = ["note", "link", "file", "photo", "audio", "video"];
+
 /**
- * GET /api/search?q=...
- * Búsqueda exhaustiva en el vault. Se usa: title, topics, category de la IA;
- * content, url, title, filename, filePath, transcription, metadata.
- * No se incluye summary en el criterio: se excluyen ítems que solo coincidían en summary.
- * Devuelve array ordenado por relevancia (score).
+ * Ejecuta findMany para un solo kind con los filtros de búsqueda.
+ * @param {string} kind - note | link | file | photo | audio | video
+ * @param {string} raw - query en minúsculas
+ * @param {object} filters - { aiFilter, aiTokenFilters, rawTokens }
  */
-router.get("/search", async (req, res) => {
-  const raw = (req.query.q || "").trim().toLowerCase();
-  if (!raw) return res.json([]);
-
-  // Tokenizar: espacios, sin duplicados; si hay varias palabras, ignorar tokens de 1 carácter (ruido)
-  const rawTokens = [...new Set(raw.split(/\s+/).filter(Boolean))];
-  const tokens = rawTokens.length > 1
-    ? rawTokens.filter((t) => t.length >= 2)
-    : rawTokens;
-  const tokensToUse = tokens.length > 0 ? tokens : rawTokens;
-
-  // Para SQLite: buscar por subcadena en campos principales + JSON de aiEnrichment (sin summary en el criterio final)
-  const aiFilter = { aiEnrichment: { contains: raw } };
-  const aiTokenFilters = rawTokens.map((t) => ({ aiEnrichment: { contains: t } }));
-
-  try {
-    const [notes, links, files, photos, audios, videos] = await Promise.all([
-      prisma.note.findMany({
+async function searchByKind(kind, raw, { aiFilter, aiTokenFilters, rawTokens }) {
+  switch (kind) {
+    case "note":
+      return prisma.note.findMany({
         where: {
           OR: [
             { content: { contains: raw } },
@@ -133,8 +120,9 @@ router.get("/search", async (req, res) => {
           ],
         },
         select: { id: true, content: true, aiEnrichment: true, processedPath: true, createdAt: true },
-      }),
-      prisma.link.findMany({
+      });
+    case "link":
+      return prisma.link.findMany({
         where: {
           OR: [
             { url: { contains: raw } },
@@ -146,20 +134,19 @@ router.get("/search", async (req, res) => {
           ],
         },
         select: { id: true, url: true, title: true, metadata: true, aiEnrichment: true, processedPath: true, createdAt: true },
-      }),
-      prisma.file.findMany({
-        where: {
-          OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters],
-        },
+      });
+    case "file":
+      return prisma.file.findMany({
+        where: { OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters] },
         select: { id: true, filename: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
-      }),
-      prisma.photo.findMany({
-        where: {
-          OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters],
-        },
+      });
+    case "photo":
+      return prisma.photo.findMany({
+        where: { OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters] },
         select: { id: true, filename: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
-      }),
-      prisma.audio.findMany({
+      });
+    case "audio":
+      return prisma.audio.findMany({
         where: {
           OR: [
             { filePath: { contains: raw } },
@@ -169,14 +156,68 @@ router.get("/search", async (req, res) => {
           ],
         },
         select: { id: true, filePath: true, transcription: true, aiEnrichment: true, processedPath: true, createdAt: true },
-      }),
-      prisma.video.findMany({
-        where: {
-          OR: [{ filePath: { contains: raw } }, { title: { contains: raw } }, aiFilter, ...aiTokenFilters],
-        },
+      });
+    case "video":
+      return prisma.video.findMany({
+        where: { OR: [{ filePath: { contains: raw } }, { title: { contains: raw } }, aiFilter, ...aiTokenFilters] },
         select: { id: true, filePath: true, title: true, aiEnrichment: true, processedPath: true, createdAt: true },
-      }),
-    ]);
+      });
+    default:
+      return [];
+  }
+}
+
+/**
+ * GET /api/search?q=...&kind=... (kind opcional)
+ * Búsqueda en el vault. Si kind está presente y es válido, busca solo en esa carpeta.
+ * Devuelve array ordenado por relevancia (score).
+ */
+router.get("/search", async (req, res) => {
+  const raw = (req.query.q || "").trim().toLowerCase();
+  if (!raw) return res.json([]);
+
+  const kindParam = (req.query.kind || "").trim().toLowerCase();
+  const singleKind = VALID_KINDS.includes(kindParam) ? kindParam : null;
+
+  // Tokenizar: espacios, sin duplicados; si hay varias palabras, ignorar tokens de 1 carácter (ruido)
+  const rawTokens = [...new Set(raw.split(/\s+/).filter(Boolean))];
+  const tokens = rawTokens.length > 1
+    ? rawTokens.filter((t) => t.length >= 2)
+    : rawTokens;
+  const tokensToUse = tokens.length > 0 ? tokens : rawTokens;
+
+  const aiFilter = { aiEnrichment: { contains: raw } };
+  const aiTokenFilters = rawTokens.map((t) => ({ aiEnrichment: { contains: t } }));
+  const filters = { aiFilter, aiTokenFilters, rawTokens };
+
+  try {
+    let notes = [];
+    let links = [];
+    let files = [];
+    let photos = [];
+    let audios = [];
+    let videos = [];
+
+    if (singleKind) {
+      const result = await searchByKind(singleKind, raw, filters);
+      switch (singleKind) {
+        case "note": notes = result; break;
+        case "link": links = result; break;
+        case "file": files = result; break;
+        case "photo": photos = result; break;
+        case "audio": audios = result; break;
+        case "video": videos = result; break;
+      }
+    } else {
+      [notes, links, files, photos, audios, videos] = await Promise.all([
+        searchByKind("note", raw, filters),
+        searchByKind("link", raw, filters),
+        searchByKind("file", raw, filters),
+        searchByKind("photo", raw, filters),
+        searchByKind("audio", raw, filters),
+        searchByKind("video", raw, filters),
+      ]);
+    }
 
     const toUrl = (filePath) => {
       if (!filePath) return null;

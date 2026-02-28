@@ -46,12 +46,17 @@ const rowButtonClass =
  * Misma previsualización (FilePreview) y mismo layout en todas las vistas.
  * Cuando se pasa `searchTokens`, resalta las tags/topic que coinciden y muestra barra de relevancia.
  */
+/** Título a mostrar: primero título IA (aiEnrichment/aiTitle), solo si no hay usa filename. */
+function getItemDisplayTitle(item) {
+  if (item?.aiTitle && String(item.aiTitle).trim()) return item.aiTitle.trim();
+  const ai = item?.aiEnrichment;
+  if (ai && typeof ai === "object" && ai.title) return String(ai.title).trim();
+  if (item?.filename && String(item.filename).trim()) return item.filename;
+  return item?.title ?? item?.url?.slice(0, 40) ?? (item?.content?.slice(0, 50) || "Sin título");
+}
+
 function VaultListItem({ item, onSelect, searchTokens }) {
-  const displayName =
-    item.filename ??
-    item.title ??
-    item.url?.slice(0, 40) ??
-    (item.content?.slice(0, 50) || "Sin título");
+  const displayName = getItemDisplayTitle(item);
   const formattedDate = formatDate(item.createdAt);
 
   // Un solo origen de temas: aiTopics (backend envía aiTags = aiTopics)
@@ -222,6 +227,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     setFolderViewActive(false);
     setSelectedKind(null);
     setItemsByKind([]);
+    setSearchTerm("");
+    setSearchResults([]);
+    setSearchOpen(false);
   }, []);
 
   const handleBack = useCallback(() => onBack(), [onBack]);
@@ -373,7 +381,11 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     if (searchOpen) searchInputRef.current?.focus();
   }, [searchOpen]);
 
-  // Búsqueda por topic/filename en backend: debounce 500ms → fetch /api/search?q=
+  // Búsqueda: si estamos dentro de una carpeta (note, link, file, etc.), buscar solo en esa carpeta
+  const searchKind = folderViewActive && selectedKind && !["favorite", "novelty"].includes(selectedKind)
+    ? selectedKind
+    : null;
+
   useEffect(() => {
     const q = searchTerm.trim();
     if (!q) {
@@ -383,7 +395,10 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     const t = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+        const url = searchKind
+          ? `/api/search?q=${encodeURIComponent(q)}&kind=${encodeURIComponent(searchKind)}`
+          : `/api/search?q=${encodeURIComponent(q)}`;
+        const res = await fetch(url);
         if (!res.ok) throw new Error("Error en búsqueda");
         const data = await res.json();
         setSearchResults(Array.isArray(data) ? data : []);
@@ -394,7 +409,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
       }
     }, 500);
     return () => clearTimeout(t);
-  }, [searchTerm]);
+  }, [searchTerm, searchKind]);
 
   const handleCloseSearch = useCallback(() => {
     setSearchTerm("");
@@ -453,7 +468,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-              placeholder="Buscar en el baúl (por nombre o tema)..."
+              placeholder={folderViewActive && selectedLabel ? `Buscar en ${selectedLabel}…` : "Buscar en el baúl (por nombre o tema)…"}
               className="flex-1 min-w-0 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
               aria-label="Buscar"
             />
@@ -554,7 +569,35 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
         )}
 
         {folderViewActive ? (
-          loadingKind ? (
+          searchTerm.trim() ? (
+            searchLoading ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm">Buscando en la carpeta…</p>
+              </div>
+            ) : searchResults.length === 0 ? (
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No se encontraron resultados en esta carpeta.</p>
+            ) : (
+              <div className="flex-1 min-h-0 flex flex-col">
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-3">
+                  {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""} · ordenados por relevancia
+                </p>
+                <ul className="space-y-2">
+                  {searchResults.map((item) => {
+                    const tokens = searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+                    return (
+                      <VaultListItem
+                        key={`search-${item.kind ?? "item"}-${item.id}`}
+                        item={item}
+                        onSelect={setSelectedItem}
+                        searchTokens={tokens}
+                      />
+                    );
+                  })}
+                </ul>
+              </div>
+            )
+          ) : loadingKind ? (
             <div className="flex flex-col items-center justify-center py-16">
               <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
               <p className="text-zinc-500 text-sm">Cargando…</p>
@@ -646,7 +689,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide snap-x snap-mandatory">
                   {weeklyWrapped.map((item, idx) => {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
-                    const displayName = item.filename ?? item.title ?? item.url?.slice(0, 30) ?? (item.content?.slice(0, 30) || "Sin título");
+                    const displayName = getItemDisplayTitle(item);
                     return (
                       <button
                         key={`wrapped-${item.kind}-${item.id}`}
@@ -743,64 +786,67 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
 
                 {/* Título */}
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-white leading-snug mb-4">
-                  {selectedItem.aiTitle ?? selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? (selectedItem.content?.slice(0, 50) || "Ítem")}
+                  {getItemDisplayTitle(selectedItem) || "Ítem"}
                 </h2>
 
-                {/* Metadata IA */}
+                {/* Metadata IA — mismas secciones en todas las carpetas */}
                 <div className="space-y-3 mb-4">
-                  {/* Resumen */}
-                  {selectedItem.aiSummary && (
-                    <div className="rounded-xl bg-zinc-50 dark:bg-neutral-800/70 border border-zinc-200 dark:border-neutral-700/50 px-4 py-3">
-                      <p className="text-xs text-zinc-500 dark:text-neutral-400 font-medium uppercase tracking-wider mb-1">Resumen</p>
-                      <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed">{selectedItem.aiSummary}</p>
-                    </div>
-                  )}
+                  {/* Resumen — siempre visible */}
+                  <div className="rounded-xl bg-zinc-50 dark:bg-neutral-800/70 border border-zinc-200 dark:border-neutral-700/50 px-4 py-3">
+                    <p className="text-xs text-zinc-500 dark:text-neutral-400 font-medium uppercase tracking-wider mb-1">Resumen</p>
+                    <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed">
+                      {selectedItem.aiSummary && selectedItem.aiSummary.trim() ? selectedItem.aiSummary : "—"}
+                    </p>
+                  </div>
 
-                  {/* Categoría + Idioma */}
-                  {(selectedItem.aiCategory || selectedItem.aiLanguage) && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedItem.aiCategory && (
-                        <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-500/30 rounded-full px-3 py-1.5">
-                          <FolderOpen className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 shrink-0" />
-                          <span className="text-xs text-violet-700 dark:text-violet-300 font-medium">{selectedItem.aiCategory}</span>
-                        </div>
-                      )}
-                      {selectedItem.aiLanguage && (
-                        <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-full px-3 py-1.5">
-                          <Globe className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400 shrink-0" />
-                          <span className="text-xs text-zinc-600 dark:text-neutral-300 font-medium uppercase">{selectedItem.aiLanguage}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Topics */}
-                  {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Tag className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
-                        <span className="text-xs text-zinc-500 dark:text-neutral-500 font-medium uppercase tracking-wider">Temas</span>
+                  {/* Categoría + Idioma — siempre visible */}
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.aiCategory ? (
+                      <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-500/30 rounded-full px-3 py-1.5">
+                        <FolderOpen className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 shrink-0" />
+                        <span className="text-xs text-violet-700 dark:text-violet-300 font-medium">{selectedItem.aiCategory}</span>
                       </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).map((tag) => (
-                          <span
-                            key={tag}
-                            className="text-xs bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full"
-                          >
-                            #{String(tag).trim().toLowerCase()}
-                          </span>
-                        ))}
+                    ) : null}
+                    {selectedItem.aiLanguage ? (
+                      <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-full px-3 py-1.5">
+                        <Globe className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400 shrink-0" />
+                        <span className="text-xs text-zinc-600 dark:text-neutral-300 font-medium uppercase">{selectedItem.aiLanguage}</span>
                       </div>
-                    </div>
-                  )}
+                    ) : null}
+                    {!selectedItem.aiCategory && !selectedItem.aiLanguage ? (
+                      <span className="text-xs text-zinc-400 dark:text-neutral-500">—</span>
+                    ) : null}
+                  </div>
 
-                  {/* Fecha */}
-                  {selectedItem.createdAt && (
-                    <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-neutral-500">
-                      <Calendar className="w-3.5 h-3.5 shrink-0" />
-                      <span>{new Date(selectedItem.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })}</span>
+                  {/* Temas — siempre visible */}
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Tag className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
+                      <span className="text-xs text-zinc-500 dark:text-neutral-500 font-medium uppercase tracking-wider">Temas</span>
                     </div>
-                  )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).length > 0
+                        ? (selectedItem.aiTopics ?? selectedItem.aiTags ?? []).map((tag) => (
+                            <span
+                              key={tag}
+                              className="text-xs bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full"
+                            >
+                              #{String(tag).trim().toLowerCase()}
+                            </span>
+                          ))
+                        : <span className="text-xs text-zinc-400 dark:text-neutral-500">—</span>}
+                    </div>
+                  </div>
+
+                  {/* Fecha — siempre visible */}
+                  <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-neutral-500">
+                    <Calendar className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {selectedItem.createdAt
+                        ? new Date(selectedItem.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
+                        : "—"}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Nota completa */}

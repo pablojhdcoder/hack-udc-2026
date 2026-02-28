@@ -90,8 +90,9 @@ async function ensureEnrichment(kind, id, entity) {
         break;
       }
       case "video": {
+        const absolutePath = resolveFilePath(entity.filePath);
         const filename = path.basename(entity.filePath);
-        enrichment = await enrichVideo(filename, entity.type);
+        enrichment = await enrichVideo(absolutePath, filename, entity.type);
         await prisma.video.update({ where: { id }, data: enrichmentPayload(enrichment) });
         break;
       }

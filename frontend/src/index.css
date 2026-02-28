@@ -66,10 +66,11 @@ html.dark #root {
   animation: slideInLeft 0.2s ease-out;
 }
 
-/* Ocultar barra de scroll manteniendo scroll (estilo app nativa) */
+/* Ocultar barra de scroll manteniendo scroll (gestos táctiles y rueda funcionan) */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
