@@ -4,9 +4,7 @@ import {
   User,
   UserPen,
   Moon,
-  Bell,
   FileDown,
-  Cloud,
   Trash2,
   Bot,
   Globe,
@@ -188,9 +186,6 @@ function Toast({ message, visible, onDismiss }) {
 export default function SettingsScreen({ onBack, onHelpCenterClick, darkMode = true, onDarkModeChange }) {
   const { locale, t } = useAppLanguage();
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
-  const [suggestionsOn, setSuggestionsOn] = useState(true);
-
-  const [cloudSheetOpen, setCloudSheetOpen] = useState(false);
   const [assistLevelSheetOpen, setAssistLevelSheetOpen] = useState(false);
   const [assistLevel, setAssistLevel] = useState("Equilibrado");
 
@@ -252,15 +247,10 @@ export default function SettingsScreen({ onBack, onHelpCenterClick, darkMode = t
           </div>
         </div>
 
-        <SettingsGroup title="General">
+        <SettingsGroup title={t("settings.general")}>
           <div className={ROW_BASE}>
             <SettingsRow icon={Moon} label={t("settings.darkMode")}>
               <ToggleSwitch on={darkMode} onClick={() => onDarkModeChange?.(!darkMode)} />
-            </SettingsRow>
-          </div>
-          <div className={ROW_BASE}>
-            <SettingsRow icon={Bell} label={t("settings.reviewSuggestions")}>
-              <ToggleSwitch on={suggestionsOn} onClick={() => setSuggestionsOn((v) => !v)} />
             </SettingsRow>
           </div>
           <button type="button" onClick={() => setLanguageSheetOpen(true)} className={ROW_BASE + " text-left"}>
@@ -273,12 +263,7 @@ export default function SettingsScreen({ onBack, onHelpCenterClick, darkMode = t
 
         <SettingsGroup title={t("settings.dataPrivacy")}>
           <button type="button" onClick={handleExportJSON} disabled={exportLoading} className={ROW_BASE + " text-left disabled:opacity-50"}>
-            <SettingsRow icon={FileDown} label={exportLoading ? "Exportando…" : t("settings.exportNotes")}>
-              <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
-            </SettingsRow>
-          </button>
-          <button type="button" onClick={() => setCloudSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Cloud} label={t("settings.cloudBackup")}>
+            <SettingsRow icon={FileDown} label={exportLoading ? t("settings.exporting") : t("settings.exportNotes")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
@@ -318,22 +303,6 @@ export default function SettingsScreen({ onBack, onHelpCenterClick, darkMode = t
       </main>
 
       <LanguageBottomSheet isOpen={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
-
-      {/* Bottom Sheet: Conectar cuenta */}
-      <BottomSheet isOpen={cloudSheetOpen} onClose={() => setCloudSheetOpen(false)} title="Conectar cuenta">
-        <div className="flex flex-col gap-2">
-          {["Google Drive", "iCloud", "OneDrive"].map((provider) => (
-            <button
-              key={provider}
-              type="button"
-              onClick={() => setCloudSheetOpen(false)}
-              className="w-full px-4 py-3 rounded-xl bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-medium transition-colors text-left"
-            >
-              {provider}
-            </button>
-          ))}
-        </div>
-      </BottomSheet>
 
       {/* Bottom Sheet: Nivel de asistencia de la IA */}
       <BottomSheet isOpen={assistLevelSheetOpen} onClose={() => setAssistLevelSheetOpen(false)} title="Nivel de asistencia">
