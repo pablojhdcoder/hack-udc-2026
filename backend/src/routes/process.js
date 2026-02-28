@@ -14,30 +14,36 @@ function isValidIdEntry(obj) {
   );
 }
 
-// POST /api/process - Procesar entradas seleccionadas y generar Markdown
+// POST /api/process - Procesar entradas seleccionadas y generar Markdown (puede tardar si usa IA)
 router.post("/", async (req, res) => {
+  const send = (status, data) => {
+    if (res.headersSent) return;
+    res.status(status).json(data);
+  };
   try {
     const { ids, destination } = req.body ?? {};
 
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "ids debe ser un array no vacío de { kind, id }" });
+      return send(400, { error: "ids debe ser un array no vacío de { kind, id }" });
     }
     if (typeof destination !== "string" || !destination.trim()) {
-      return res.status(400).json({ error: "destination es obligatorio (string no vacío)" });
+      return send(400, { error: "destination es obligatorio (string no vacío)" });
     }
 
     const validIds = ids.filter(isValidIdEntry);
     if (validIds.length === 0) {
-      return res.status(400).json({ error: "Ningún ítem en ids tiene formato válido { kind, id }" });
+      return send(400, { error: "Ningún ítem en ids tiene formato válido { kind, id }" });
     }
 
+    console.log("[Process] Iniciando procesado de", validIds.length, "ítem(s)...");
     const results = await Promise.all(
       validIds.map((item) => processItem({ kind: item.kind, id: item.id }, destination.trim()))
     );
-
-    res.json({ results });
+    console.log("[Process] Completado:", results.length, "resultado(s)");
+    send(200, { results });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Process] Error:", err.message);
+    send(500, { error: err.message ?? "Error al procesar" });
   }
 });
 
