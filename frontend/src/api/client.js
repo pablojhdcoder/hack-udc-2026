@@ -124,6 +124,22 @@ export async function processItems(ids, destination) {
 }
 
 /**
+ * Actualiza los campos editables de aiEnrichment (title, summary, topics) de un ítem del inbox.
+ * @param {string} kind - link | note | file | audio | video
+ * @param {string} id
+ * @param {{ title?: string, summary?: string, topics?: string[] }} fields
+ */
+export async function updateInboxEnrichment(kind, id, fields) {
+  const res = await fetch(`${API_BASE}/inbox/${kind}/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(fields),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
  * Descarta/borra un ítem del inbox (lo elimina y deja de aparecer).
  * @param {string} kind - link | note | file | audio | video
  * @param {string} id

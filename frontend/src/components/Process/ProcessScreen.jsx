@@ -15,7 +15,7 @@ import {
   Save,
   X,
 } from "lucide-react";
-import { getInbox, processItems, discardItem } from "../../api/client";
+import { getInbox, processItems, discardItem, updateInboxEnrichment } from "../../api/client";
 
 const ICON_BY_KIND = {
   link: Link2,
@@ -52,6 +52,16 @@ function getAISummary(item) {
   return null;
 }
 
+/** Extrae el título de la IA del ítem (aiEnrichment.title). */
+function getAITitle(item) {
+  if (!item?.aiEnrichment) return null;
+  try {
+    const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
+    if (data?.title) return String(data.title).trim();
+  } catch {}
+  return null;
+}
+
 /** Topics del ítem para las píldoras (#topic). Lee del nuevo formato aiEnrichment. */
 function getItemTopics(item) {
   if (!item?.aiEnrichment) return [];
@@ -79,7 +89,10 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(DEFAULT_NOTE_BODY);
+  const [editedTitle, setEditedTitle] = useState("");
+  const [editedSummary, setEditedSummary] = useState(DEFAULT_NOTE_BODY);
+  const [editedTopics, setEditedTopics] = useState([]);
+  const [topicsInput, setTopicsInput] = useState("");
   const [processing, setProcessing] = useState(false);
   const [processError, setProcessError] = useState(null);
   const [successInfo, setSuccessInfo] = useState(null);
@@ -104,8 +117,13 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
 
   useEffect(() => {
     const item = items[currentIndex];
+    const title = item ? getAITitle(item) : null;
     const summary = item ? getAISummary(item) : null;
-    setEditedContent(summary || DEFAULT_NOTE_BODY);
+    const topics = item ? getItemTopics(item) : [];
+    setEditedTitle(title || "");
+    setEditedSummary(summary || DEFAULT_NOTE_BODY);
+    setEditedTopics(topics);
+    setTopicsInput(topics.join(", "));
     setIsEditing(false);
   }, [currentIndex, items]);
 
@@ -129,12 +147,43 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
     }
   };
 
+  const handleSaveEdit = () => {
+    const parsed = topicsInput.split(",").map((t) => t.trim()).filter(Boolean);
+    setEditedTopics(parsed);
+    setIsEditing(false);
+  };
+
+  const handleStartEdit = () => {
+    setTopicsInput(editedTopics.join(", "));
+    setIsEditing(true);
+  };
+
   const handleAprobar = async () => {
     if (!currentItem || processing) return;
     setProcessError(null);
     setProcessing(true);
     try {
-      const destination = currentItem ? getDestinationFromKind(currentItem.kind) : "notas";
+      // Derivar topics finales siempre desde topicsInput (fuente de verdad aunque no se haya pulsado "Guardar")
+      const finalTopics = topicsInput.split(",").map((t) => t.trim()).filter(Boolean);
+
+      const originalTitle = getAITitle(currentItem) || "";
+      const originalSummary = getAISummary(currentItem) || DEFAULT_NOTE_BODY;
+      const originalTopics = getItemTopics(currentItem);
+
+      const titleChanged = editedTitle !== originalTitle;
+      const summaryChanged = editedSummary !== originalSummary;
+      const topicsChanged =
+        JSON.stringify(finalTopics.slice().sort()) !== JSON.stringify(originalTopics.slice().sort());
+
+      if (titleChanged || summaryChanged || topicsChanged) {
+        await updateInboxEnrichment(currentItem.kind, currentItem.id, {
+          title: editedTitle,
+          summary: editedSummary,
+          topics: finalTopics,
+        });
+      }
+
+      const destination = getDestinationFromKind(currentItem.kind);
       const data = await processItems(
         [{ kind: currentItem.kind, id: currentItem.id }],
         destination
@@ -340,45 +389,61 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
 
         {/* 3. Tarjeta Sugerencia de IA (protagonista) */}
         <section className="rounded-2xl bg-zinc-50 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10 p-4 dark:bg-neutral-800 dark:border-blue-500/40 dark:shadow-blue-500/10">
-          <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-neutral-400 dark:bg-neutral-900/60 w-max px-2 py-1 rounded-md mb-3">
-            Se guardará en: {getTypeLabel(currentItem)}
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-500 bg-gray-800/50 dark:text-neutral-400 dark:bg-neutral-900/60 px-2 py-1 rounded-md">
+              Se guardará en: {getTypeLabel(currentItem)}
+            </div>
+            {isEditing ? (
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                className="p-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors"
+                aria-label="Guardar cambios"
+              >
+                <Save className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartEdit}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white dark:hover:text-white transition-colors hover:bg-neutral-700/50"
+                aria-label="Editar"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          <div className="mb-4 relative">
-            <div className="absolute top-0 right-0 z-10">
-              {isEditing ? (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="p-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors"
-                  aria-label="Guardar"
-                >
-                  <Save className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(true)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-white dark:hover:text-white transition-colors hover:bg-neutral-700/50"
-                  aria-label="Editar"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2 pr-10">
-              Nota procesada — {currentItem.kind === "link" ? "Enlace" : currentItem.kind === "audio" ? "Voz" : currentItem.type || "Nota"}
-            </h3>
+          {/* Título de la IA */}
+          <div className="mb-3">
+            {isEditing ? (
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                className="w-full rounded-lg bg-neutral-900 text-white px-3 py-2 border border-neutral-700 text-sm outline-none focus:ring-2 focus:ring-brand-500/50 font-semibold"
+                placeholder="Título del ítem..."
+                maxLength={80}
+              />
+            ) : (
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white leading-tight">
+                {editedTitle || getTypeLabel(currentItem)}
+              </h3>
+            )}
+          </div>
+
+          {/* Resumen de la IA */}
+          <div className="mb-4">
             {isEditing ? (
               <textarea
-                value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
-                className="w-full min-h-[120px] rounded-lg bg-neutral-900 text-white p-3 border border-neutral-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50 dark:bg-neutral-900 dark:border-neutral-700"
+                value={editedSummary}
+                onChange={(e) => setEditedSummary(e.target.value)}
+                className="w-full min-h-[100px] rounded-lg bg-neutral-900 text-white p-3 border border-neutral-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50"
                 placeholder="Edita el resumen..."
               />
             ) : (
-              <p className="text-sm text-gray-600 dark:text-gray-300 italic mb-4 leading-relaxed pr-10">
-                {editedContent}
+              <p className="text-sm text-gray-600 dark:text-gray-300 italic leading-relaxed">
+                {editedSummary}
               </p>
             )}
           </div>
@@ -399,16 +464,34 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
             </div>
           )}
 
-          <div className="flex flex-wrap gap-2">
-            {getItemTopics(currentItem).map((topic) => (
-              <span
-                key={topic}
-                className="bg-blue-500/10 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium mr-2"
-              >
-                #{topic}
-              </span>
-            ))}
-          </div>
+          {/* Tags / Topics */}
+          {isEditing ? (
+            <div>
+              <p className="text-xs text-gray-500 dark:text-neutral-400 mb-1.5">
+                Etiquetas (separadas por coma):
+              </p>
+              <input
+                type="text"
+                value={topicsInput}
+                onChange={(e) => setTopicsInput(e.target.value)}
+                className="w-full rounded-lg bg-neutral-900 text-white px-3 py-2 border border-neutral-700 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
+                placeholder="ej: inteligencia artificial, react, tutorial"
+              />
+            </div>
+          ) : (
+            editedTopics.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {editedTopics.map((topic) => (
+                  <span
+                    key={topic}
+                    className="bg-blue-500/10 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium"
+                  >
+                    #{topic}
+                  </span>
+                ))}
+              </div>
+            )
+          )}
         </section>
       </main>
 

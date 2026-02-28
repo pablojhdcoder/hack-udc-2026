@@ -13,7 +13,7 @@ model Link {
   type           String   // youtube, twitch, telegram, article, generic
   title          String?
   metadata       String?  // JSON: preview, channel, etc.
-  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
+  aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending") // pending | processing | processed | error
   processedPath  String?
@@ -25,7 +25,7 @@ model File {
   type           String   // pdf, word, image, ...
   filename       String
   size           Int?
-  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
+  aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -37,7 +37,7 @@ model Photo {
   type           String   // jpeg, png, webp, gif, ...
   filename       String
   size           Int?
-  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
+  aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -49,7 +49,7 @@ model Audio {
   type           String   // voice_note, podcast, ...
   duration       Int?     // segundos
   transcription  String?
-  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
+  aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -59,7 +59,7 @@ model Note {
   id             String   @id @default(cuid())
   content        String
   type           String   // note, code, task, idea
-  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
+  aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
@@ -71,7 +71,7 @@ model Video {
   type           String   // mp4, webm, youtube_downloaded, ...
   duration       Int?     // segundos
   title          String?
-  aiEnrichment   String?  // JSON: { title, topics, language, category, enrichedAt }
+  aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?

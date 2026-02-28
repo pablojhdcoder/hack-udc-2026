@@ -79,6 +79,7 @@ async function azureChat(messages, maxTokens = 400) {
 // Esquema de enriquecimiento:
 // {
 //   title      → máx 30 caracteres, representativo del contenido
+//   summary    → resumen breve del contenido en 2-3 frases
 //   topics     → array de 3-5 palabras clave específicas y NO redundantes entre sí
 //   language   → código ISO ("es", "en", ...)
 //   category   → categoría amplia y descriptiva
@@ -98,6 +99,7 @@ Usa el idioma del contenido.`;
 
 const JSON_SCHEMA = `{
   "title": "título representativo (máx 30 caracteres)",
+  "summary": "resumen breve del contenido en 2-3 frases, en el mismo idioma que el contenido",
   "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
   "language": "es|en|...",
   "category": "categoría amplia y descriptiva"

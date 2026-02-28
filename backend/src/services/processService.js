@@ -35,6 +35,7 @@ async function ensureEnrichment(kind, id, entity) {
   const hasValidEnrichment =
     ai &&
     ai.title &&
+    ai.summary &&
     !ai.error;
 
   if (ai?.error) {

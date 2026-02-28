@@ -885,6 +885,38 @@ router.get("/:kind/:id", async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+// PATCH /api/inbox/:kind/:id — Actualizar aiEnrichment (title, summary, topics)
+// ──────────────────────────────────────────────
+
+router.patch("/:kind/:id", async (req, res) => {
+  const { kind, id } = req.params;
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, photo: prisma.photo, audio: prisma.audio, video: prisma.video };
+  const model = modelMap[kind];
+  if (!model) return res.status(400).json({ error: "kind inválido" });
+
+  try {
+    const item = await model.findUnique({ where: { id } });
+    if (!item) return res.status(404).json({ error: "No encontrado" });
+
+    let aiEnrichment = {};
+    if (item.aiEnrichment) {
+      try { aiEnrichment = JSON.parse(item.aiEnrichment); } catch {}
+    }
+
+    const { title, summary, topics } = req.body;
+    if (title !== undefined) aiEnrichment.title = title;
+    if (summary !== undefined) aiEnrichment.summary = summary;
+    if (topics !== undefined) aiEnrichment.topics = Array.isArray(topics) ? topics : [];
+
+    await model.update({ where: { id }, data: { aiEnrichment: JSON.stringify(aiEnrichment) } });
+
+    return res.json({ ok: true, aiEnrichment });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
 // DELETE /api/inbox/:kind/:id — Descartar/borrar un ítem del inbox
 // ──────────────────────────────────────────────
 
