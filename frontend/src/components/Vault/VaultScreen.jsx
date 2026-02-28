@@ -37,6 +37,49 @@ const KIND_LABEL = {
   favorite: "Favoritos",
 };
 
+/** Tarjeta de un resultado de búsqueda. Render 100% basado en datos del item (sin índice). */
+function SearchResultCard({ item, onSelect }) {
+  const [imgError, setImgError] = useState(false);
+  const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
+  const displayName = item.filename ?? item.title ?? "Sin nombre";
+  const showThumbnail = (item.thumbnailUrl || item.kind === "photo") && !imgError;
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(item)}
+        className="w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+      >
+        {showThumbnail && item.thumbnailUrl ? (
+          <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex-shrink-0">
+            <img
+              src={item.thumbnailUrl}
+              alt=""
+              className="w-12 h-12 object-cover"
+              loading="eager"
+              onError={() => setImgError(true)}
+            />
+          </div>
+        ) : (
+          <div className="w-12 h-12 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
+          {item.topic && (
+            <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full w-max mt-1 inline-block dark:bg-blue-500/20 dark:text-blue-300">
+              {item.topic}
+            </span>
+          )}
+        </div>
+        <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+      </button>
+    </li>
+  );
+}
+
 function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(iso);
@@ -528,38 +571,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No se han encontrado resultados.</p>
             ) : (
               <ul className="space-y-2">
-                {searchResults.map((item) => {
-                  const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
-                  const displayName = item.filename ?? item.title ?? "Sin nombre";
-                  return (
-                    <li key={`search-${item.kind ?? "item"}-${item.id}`}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedItem(item)}
-                        className="w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
-                      >
-                        {item.thumbnailUrl ? (
-                          <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex-shrink-0">
-                            <img src={item.thumbnailUrl} alt="" className="w-12 h-12 object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-12 h-12 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
-                            <Icon className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
-                          {item.topic && (
-                            <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-1 rounded-full w-max mt-1 inline-block dark:bg-blue-500/20 dark:text-blue-300">
-                              {item.topic}
-                            </span>
-                          )}
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                      </button>
-                    </li>
-                  );
-                })}
+                {searchResults.map((item) => (
+                  <SearchResultCard key={`search-${item.kind ?? "item"}-${item.id}`} item={item} onSelect={setSelectedItem} />
+                ))}
               </ul>
             )}
           </div>
