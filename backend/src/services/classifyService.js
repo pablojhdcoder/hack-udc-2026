@@ -31,6 +31,8 @@ const FILE_CATEGORIES = {
   mp4: "video",
   mkv: "video",
   webm: "video",
+  mov: "video",
+  avi: "video",
   md: "markdown",
   txt: "text",
 };
@@ -67,6 +69,10 @@ export function classifyFile(filename) {
 
   if (["audio", "mp3", "wav", "ogg", "m4a"].includes(ext)) {
     return { kind: "audio", type: type ?? "audio" };
+  }
+
+  if (["video", "mp4", "mkv", "webm", "mov", "avi"].includes(ext) || type === "video") {
+    return { kind: "video", type: type ?? "video" };
   }
 
   return { kind: "file", type: type ?? "unknown" };

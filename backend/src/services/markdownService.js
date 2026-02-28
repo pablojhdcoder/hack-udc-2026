@@ -101,6 +101,13 @@ export function buildMarkdownContent(item) {
     bodyParts.push("");
   }
 
+  // Vídeo
+  if (item.kind === "video" && item.filePath) {
+    bodyParts.push("## Vídeo", "", `- **Ruta:** \`${item.filePath}\``);
+    if (item.title) bodyParts.push(`- **Título:** ${item.title}`);
+    bodyParts.push("");
+  }
+
   // Tags como footer visual
   if (ai?.tags?.length) {
     bodyParts.push("---", "");
