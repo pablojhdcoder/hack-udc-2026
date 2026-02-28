@@ -244,7 +244,7 @@ export default function FooterCapture({
   };
 
   return (
-    <footer className="shrink-0 bg-white border-t border-zinc-200 safe-bottom dark:bg-neutral-900 dark:border-neutral-800">
+    <footer className="shrink-0 w-full bg-white border-t border-zinc-200 safe-bottom dark:bg-neutral-950 dark:border-neutral-800/50">
       <input
         ref={fileInputRef}
         type="file"
@@ -316,43 +316,26 @@ export default function FooterCapture({
         </div>
       )}
 
-      <div className="relative flex items-center gap-2 px-3 pb-3 pt-2">
-        <div className="relative flex items-center gap-0.5">
+      {recordingError && (
+        <div className="px-3 pt-1.5">
+          <p className="text-xs text-red-500 dark:text-red-400 truncate" role="alert">
+            {recordingError}
+          </p>
+        </div>
+      )}
+
+      <div className="w-full p-3 flex items-center gap-2 bg-white border-t border-zinc-200 shrink-0 dark:bg-neutral-950 dark:border-neutral-800/50">
+        {/* Icono Adjuntar (izquierda) */}
+        <div className="relative shrink-0">
           <button
             type="button"
             onClick={handleAttachClick}
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-zinc-400 transition-colors"
+            className="p-2 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200 rounded-full transition-colors cursor-pointer shrink-0 dark:text-neutral-400 dark:hover:text-white dark:hover:bg-neutral-800"
             aria-label="Adjuntar archivo"
             aria-expanded={attachMenuOpen}
           >
             <Paperclip className="w-5 h-5" />
           </button>
-          <button
-            type="button"
-            onClick={handleOpenCamera}
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-zinc-400 transition-colors"
-            aria-label="Tomar foto"
-          >
-            <Camera className="w-5 h-5" />
-          </button>
-          <button
-            type="button"
-            onClick={handleMicClick}
-            disabled={sending}
-            className={`flex-shrink-0 p-2.5 rounded-full transition-colors ${
-              recording
-                ? "bg-red-500 text-white hover:bg-red-600"
-                : "hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-zinc-400"
-            } disabled:opacity-50`}
-            aria-label={recording ? "Detener grabación" : "Grabar audio"}
-          >
-            {recording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-          </button>
-          {recordingError && (
-            <p className="text-xs text-red-600 dark:text-red-400 absolute left-0 right-0 -top-5 px-2 truncate" role="alert">
-              {recordingError}
-            </p>
-          )}
           {attachMenuOpen && (
             <>
               <div
@@ -364,7 +347,7 @@ export default function FooterCapture({
                 <button
                   type="button"
                   onClick={handleSubirArchivo}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-left text-sm"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-700 text-zinc-800 dark:text-zinc-200 text-left text-sm"
                 >
                   <FileUp className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
                   Subir archivo
@@ -374,27 +357,52 @@ export default function FooterCapture({
           )}
         </div>
 
-        <div className="flex-1 flex items-center rounded-3xl bg-zinc-100 border border-zinc-200 pl-4 pr-2 py-2 min-h-[44px] dark:bg-neutral-800 dark:border-neutral-700/50">
+        {/* Contenedor del input (píldora) + iconos cámara y mic dentro */}
+        <div className="flex-1 flex items-center bg-zinc-100 border border-zinc-200 rounded-full px-4 py-1.5 min-h-[44px] dark:bg-neutral-900 dark:border-neutral-800">
           <input
             type="text"
             placeholder="Escribe o pega un enlace..."
-            className="flex-1 bg-transparent text-zinc-900 placeholder-zinc-500 text-[15px] outline-none min-w-0 dark:text-zinc-100 dark:placeholder-zinc-500"
+            className="w-full bg-transparent text-zinc-900 dark:text-white outline-none placeholder-neutral-500 py-1 text-sm min-w-0"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={sending}
             aria-label="Entrada de texto"
           />
+          <div className="flex items-center gap-3 text-neutral-400 ml-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleOpenCamera}
+              className="w-5 h-5 flex items-center justify-center hover:text-white cursor-pointer transition-colors"
+              aria-label="Tomar foto"
+            >
+              <Camera className="w-5 h-5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleMicClick}
+              disabled={sending}
+              className={`p-1.5 rounded-full transition-colors cursor-pointer disabled:opacity-50 ${
+                recording
+                  ? "bg-red-500 text-white hover:bg-red-600"
+                  : "hover:text-white"
+              }`}
+              aria-label={recording ? "Detener grabación" : "Grabar audio"}
+            >
+              {recording ? <Square className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
 
+        {/* Botón Enviar (derecha) */}
         <button
           type="button"
           onClick={handleSend}
           disabled={sending || !inputValue.trim()}
-          className="flex-shrink-0 w-11 h-11 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          className="bg-blue-600 hover:bg-blue-500 text-white p-2.5 rounded-full shrink-0 flex items-center justify-center shadow-md transition-transform active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100"
           aria-label="Enviar"
         >
-          <Send className="w-5 h-5" />
+          <Send className="w-5 h-5 ml-0.5" />
         </button>
       </div>
     </footer>
