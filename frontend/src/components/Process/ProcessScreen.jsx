@@ -13,7 +13,7 @@ import {
   Folder,
   Save,
 } from "lucide-react";
-import { getInbox, processItems } from "../../api/client";
+import { getInbox, processItems, discardItem } from "../../api/client";
 
 const ICON_BY_KIND = {
   link: Link2,
@@ -39,7 +39,7 @@ function getRawPreview(item) {
   return "Sin contenido";
 }
 
-export default function ProcessScreen({ onBack }) {
+export default function ProcessScreen({ onBack, onProcessDone }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -47,6 +47,8 @@ export default function ProcessScreen({ onBack }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(DEFAULT_NOTE_BODY);
+  const [processing, setProcessing] = useState(false);
+  const [processError, setProcessError] = useState(null);
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
@@ -74,30 +76,38 @@ export default function ProcessScreen({ onBack }) {
   const total = items.length;
   const progress = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
 
-  const handleDescartar = () => {
-    if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
-    else onBack();
+  const handleDescartar = async () => {
+    if (!currentItem) return;
+    setProcessError(null);
+    try {
+      await discardItem(currentItem.kind, currentItem.id);
+      onProcessDone?.();
+      const { items: newItems } = await getInbox();
+      const list = Array.isArray(newItems) ? newItems : [];
+      setItems(list);
+      setCurrentIndex(0);
+      if (list.length === 0) onBack();
+    } catch (err) {
+      setProcessError(err?.message ?? "Error al descartar");
+    }
   };
 
   const handleAprobar = async () => {
-    if (!currentItem) return;
-    
-    console.log(`[ProcessScreen] Procesando item:`, currentItem);
-    
+    if (!currentItem || processing) return;
+    setProcessError(null);
+    setProcessing(true);
     try {
-      // Procesar el item actual
       await processItems(
         [{ kind: currentItem.kind, id: currentItem.id }],
-        suggestedFolder
+        suggestedFolder.trim() || MOCK_FOLDERS[0]
       );
-      console.log(`[ProcessScreen] Item procesado exitosamente`);
-      
-      // Avanzar al siguiente o volver
-      if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
-      else onBack();
-    } catch (error) {
-      console.error(`[ProcessScreen] Error procesando:`, error);
-      alert(`Error al procesar: ${error.message}`);
+      onProcessDone?.();
+      await loadInbox();
+      if (items.length <= 1) onBack();
+    } catch (err) {
+      setProcessError(err?.message ?? "Error al procesar");
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -166,6 +176,11 @@ export default function ProcessScreen({ onBack }) {
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 space-y-6 py-5 pb-4 scrollbar-hide">
+        {processError && (
+          <div className="rounded-xl bg-red-500/20 text-red-700 dark:text-red-300 px-4 py-3 text-sm">
+            {processError}
+          </div>
+        )}
         {/* 2. Tarjeta Entrada Original (secundaria) */}
         <section className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 dark:bg-gray-800/40 dark:border-gray-700/50">
           <div className="flex gap-3">
@@ -284,11 +299,16 @@ export default function ProcessScreen({ onBack }) {
         <button
           type="button"
           onClick={handleAprobar}
-          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20"
+          disabled={processing}
+          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-60 disabled:pointer-events-none"
           aria-label="Aprobar"
         >
-          <Check className="w-6 h-6" />
-          <span className="text-xs font-medium">Aprobar</span>
+          {processing ? (
+            <Loader2 className="w-6 h-6 animate-spin" />
+          ) : (
+            <Check className="w-6 h-6" />
+          )}
+          <span className="text-xs font-medium">{processing ? "Procesando…" : "Aprobar"}</span>
         </button>
       </footer>
     </div>

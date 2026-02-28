@@ -61,14 +61,18 @@ export function classifyInput(rawInput) {
 }
 
 /**
- * Clasifica un fichero subido por su extensión
+ * Clasifica un fichero subido por su extensión (y nombre para grabaciones de voz)
  */
 export function classifyFile(filename) {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  const name = (filename ?? "").toLowerCase();
+  const ext = name.split(".").pop() ?? "";
   const type = FILE_CATEGORIES[ext];
 
   if (["audio", "mp3", "wav", "ogg", "m4a"].includes(ext)) {
     return { kind: "audio", type: type ?? "audio" };
+  }
+  if (ext === "webm" && (name.includes("nota-voz") || name.includes("recording"))) {
+    return { kind: "audio", type: "voice_note" };
   }
 
   if (["video", "mp4", "mkv", "webm", "mov", "avi"].includes(ext) || type === "video") {
