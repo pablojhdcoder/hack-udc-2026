@@ -62,7 +62,7 @@ export default function App() {
   const [processInboxItems, setProcessInboxItems] = useState(null);
   const [darkMode, setDarkMode] = useState(() => {
     try {
-      return localStorage.getItem("digitalbrain-theme") !== "light";
+      return localStorage.getItem("rikibrain-theme") !== "light";
     } catch {
       return true;
     }
@@ -102,7 +102,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
     try {
-      localStorage.setItem("digitalbrain-theme", darkMode ? "dark" : "light");
+      localStorage.setItem("rikibrain-theme", darkMode ? "dark" : "light");
     } catch {}
   }, [darkMode]);
 
@@ -214,7 +214,13 @@ export default function App() {
   if (currentView === "calendario") {
     return (
       <MobileFrame>
-        <CalendarioView onBack={() => setCurrentView("inbox")} />
+        <CalendarioView
+          onBack={() => setCurrentView("inbox")}
+          onNavigateToSource={(kind, id) => {
+            setVaultInitial({ folder: kind, itemId: id ?? null });
+            setCurrentView("procesado");
+          }}
+        />
       </MobileFrame>
     );
   }
@@ -245,7 +251,7 @@ export default function App() {
 
   return (
     <MobileFrame>
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onNavigate={handleNavigate} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onNavigate={handleNavigate} onOpenChat={() => setIsChatOpen(true)} />
       <FilterBottomSheet
         isOpen={filterSheetOpen}
         onClose={() => setFilterSheetOpen(false)}
@@ -288,7 +294,7 @@ export default function App() {
             <header className="shrink-0 flex justify-between items-center p-4 border-b border-zinc-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
                 <Brain className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{t("chat.title")}</h2>
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{t("Riki Brain")}</h2>
               </div>
               <button
                 type="button"

@@ -10,6 +10,7 @@ const CARD_MAP = {
   audio: VoiceNoteCard,
   file: FileCard,
   photo: FileCard,
+  video: FileCard,
 };
 
 export default function InboxCard({ item, onDiscardItem }) {

@@ -41,7 +41,7 @@ function getEventDateKey(event) {
   return toDateKey(d);
 }
 
-export default function CalendarioView({ onBack }) {
+export default function CalendarioView({ onBack, onNavigateToSource }) {
   const today = useMemo(() => new Date(), []);
   const [currentDate, setCurrentDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -79,7 +79,7 @@ export default function CalendarioView({ onBack }) {
   const handleDeleteEvent = async (id) => {
     setDeletingId(id);
     try {
-      await fetch(`/api/eventos/${id}`, { method: "DELETE" });
+      await fetch(`/api/eventos/${id}?deleteSource=true`, { method: "DELETE" });
       setEvents((prev) => prev.filter((e) => e.id !== id));
     } catch {
       // silenciar error
@@ -195,25 +195,26 @@ export default function CalendarioView({ onBack }) {
                 const hasEvent = hasEventOnDay(dayNum);
 
                 return (
+                  <div key={dayNum} className="flex items-center justify-center">
                   <button
-                    key={dayNum}
                     type="button"
                     onClick={() => handleSelectDay(dayNum)}
                     className={`
-                      flex flex-col items-center justify-center p-2 h-12 w-full cursor-pointer rounded-full transition-colors relative
+                      flex flex-col items-center justify-center w-9 h-9 cursor-pointer rounded-full transition-colors relative
                       ${isSelected ? "bg-blue-600 text-white" : ""}
                       ${!isSelected && isToday ? "text-blue-500 dark:text-blue-400 font-bold" : ""}
                       ${!isSelected && !isToday ? "text-zinc-800 dark:text-white hover:bg-zinc-100 dark:hover:bg-neutral-800" : ""}
                     `}
                   >
-                    <span>{dayNum}</span>
+                    <span className="text-sm leading-none">{dayNum}</span>
                     {hasEvent && (
                       <div
-                        className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${isSelected ? "bg-white" : "bg-blue-400"}`}
+                        className={`w-1.5 h-1.5 rounded-full mt-0.5 shrink-0 ${isSelected ? "bg-white" : "bg-blue-400"}`}
                         aria-hidden
                       />
                     )}
                   </button>
+                  </div>
                 );
               })}
             </div>
@@ -240,7 +241,16 @@ export default function CalendarioView({ onBack }) {
                     .map((event, index) => (
                     <li
                       key={event.id ?? index}
-                      className="rounded-xl bg-zinc-50 dark:bg-neutral-800/80 border border-zinc-200 dark:border-neutral-700/50 p-4 flex flex-col gap-1.5 group"
+                      onClick={() => {
+                        if (onNavigateToSource && event.sourceKind && event.sourceId) {
+                          onNavigateToSource(event.sourceKind, event.sourceId);
+                        }
+                      }}
+                      className={`rounded-xl bg-zinc-50 dark:bg-neutral-800/80 border border-zinc-200 dark:border-neutral-700/50 p-4 flex flex-col gap-1.5 group ${
+                        onNavigateToSource && event.sourceKind && event.sourceId
+                          ? "cursor-pointer hover:bg-zinc-100 dark:hover:bg-neutral-800/90 transition-colors"
+                          : ""
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -267,7 +277,7 @@ export default function CalendarioView({ onBack }) {
                         </div>
                         <button
                           type="button"
-                          onClick={() => handleDeleteEvent(event.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
                           disabled={deletingId === event.id}
                           className="p-1.5 rounded-lg text-zinc-300 dark:text-neutral-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100 disabled:opacity-50"
                           aria-label="Eliminar evento"

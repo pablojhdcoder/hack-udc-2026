@@ -1,5 +1,7 @@
 import { Router } from "express";
 import path from "path";
+import fs from "fs";
+import { spawn } from "child_process";
 import prisma from "../lib/prisma.js";
 import { classifyInput, classifyFile } from "../services/classifyService.js";
 import { getLinkPreview } from "../services/linkPreviewService.js";
@@ -14,6 +16,29 @@ import {
   detectCalendarEvents,
 } from "../services/aiService.js";
 import { parseFile as parseAudioMetadata } from "music-metadata";
+import { extractFileContent } from "../services/fileExtractService.js";
+
+/**
+ * Genera un thumbnail JPG del primer fotograma de un vídeo usando ffmpeg.
+ * @param {string} videoPath - ruta absoluta al vídeo
+ * @param {string} thumbPath - ruta absoluta donde guardar el thumbnail
+ * @returns {Promise<boolean>} true si se generó correctamente
+ */
+function generateVideoThumbnail(videoPath, thumbPath) {
+  return new Promise((resolve) => {
+    const proc = spawn("ffmpeg", [
+      "-y",
+      "-i", videoPath,
+      "-ss", "00:00:01",
+      "-vframes", "1",
+      "-vf", "scale=320:-1",
+      "-q:v", "5",
+      thumbPath,
+    ]);
+    proc.on("close", (code) => resolve(code === 0));
+    proc.on("error", () => resolve(false));
+  });
+}
 
 async function getAudioDurationSeconds(filePath) {
   try {
@@ -77,8 +102,8 @@ async function runLinkEnrichment(id, url, preview) {
   try {
     const enrichment = await enrichLink(url, preview);
     await saveEnrichment(prisma.link, id, enrichment);
-    // Detectar eventos en el título + descripción del enlace
-    const linkText = [url, preview?.title, preview?.description].filter(Boolean).join("\n");
+    // Detectar eventos en el título + descripción + markdown del enlace (Firecrawl)
+    const linkText = [url, preview?.title, preview?.description, preview?.markdown?.slice(0, 3000)].filter(Boolean).join("\n");
     const events = await detectCalendarEvents(linkText);
     await saveCalendarEvents(events, "link", id);
   } catch (err) {
@@ -89,9 +114,18 @@ async function runLinkEnrichment(id, url, preview) {
 
 async function runFileEnrichment(id, filePath, type, filename) {
   try {
-    const enrichment = await enrichFile(filePath, type, filename);
+    const absolutePath = filePath.startsWith("/") ? filePath : path.resolve(process.cwd(), filePath);
+    const [enrichment, extracted] = await Promise.all([
+      enrichFile(filePath, type, filename),
+      extractFileContent(absolutePath, type),
+    ]);
     await saveEnrichment(prisma.file, id, enrichment);
     console.log("[AI] Fichero", id, "enriquecido correctamente.");
+    // Detectar eventos de calendario en el texto extraído del fichero
+    if (extracted?.text) {
+      const events = await detectCalendarEvents(extracted.text, { maxChars: 5000 });
+      await saveCalendarEvents(events, "file", id);
+    }
   } catch (err) {
     console.error(`[AI] Error enriqueciendo fichero ${id}:`, err.message);
     await saveEnrichment(prisma.file, id, { error: err.message, enrichedAt: new Date().toISOString() });
@@ -100,9 +134,17 @@ async function runFileEnrichment(id, filePath, type, filename) {
 
 async function runPhotoEnrichment(id, filePath, type, filename) {
   try {
-    const enrichment = await enrichFile(filePath, type, filename);
+    const absolutePath = filePath.startsWith("/") ? filePath : path.resolve(process.cwd(), filePath);
+    const [enrichment, extracted] = await Promise.all([
+      enrichFile(filePath, type, filename),
+      extractFileContent(absolutePath, type),
+    ]);
     await saveEnrichment(prisma.photo, id, enrichment);
     console.log("[AI] Foto", id, "enriquecida correctamente.");
+    if (extracted?.text) {
+      const events = await detectCalendarEvents(extracted.text, { maxChars: 5000 });
+      await saveCalendarEvents(events, "photo", id);
+    }
   } catch (err) {
     console.error(`[AI] Error enriqueciendo foto ${id}:`, err.message);
     await saveEnrichment(prisma.photo, id, { error: err.message, enrichedAt: new Date().toISOString() });
@@ -202,6 +244,7 @@ router.post("/", optionalMulter, async (req, res) => {
       }
 
       if (kind === "video") {
+        const originalFilename = req.file.originalname;
         const video = await prisma.video.create({
           data: {
             filePath: relativePath,
@@ -210,16 +253,25 @@ router.post("/", optionalMulter, async (req, res) => {
           },
         });
 
+        // Generar thumbnail con ffmpeg
+        const uploadsDir = path.dirname(req.file.path);
+        const thumbFilename = `thumb_${video.id}.jpg`;
+        const thumbAbsPath = path.join(uploadsDir, thumbFilename);
+        const thumbGenerated = await generateVideoThumbnail(req.file.path, thumbAbsPath);
+        const thumbnailUrl = thumbGenerated ? `/api/uploads/${thumbFilename}` : null;
+
         if (aiActive) {
           console.log("[AI] Enriqueciendo vídeo", video.id);
-          runVideoEnrichment(video.id, req.file.path, req.file.originalname, video.type).catch((e) => console.error("[AI] Video enrichment catch:", e.message));
+          runVideoEnrichment(video.id, req.file.path, originalFilename, video.type).catch((e) => console.error("[AI] Video enrichment catch:", e.message));
         }
 
         return res.status(201).json({
           kind: "video",
           id: video.id,
           type: video.type,
+          filename: originalFilename,
           filePath: video.filePath,
+          thumbnailUrl,
           createdAt: video.createdAt,
           inboxStatus: "pending",
           aiEnrichmentPending: aiActive,
@@ -543,7 +595,12 @@ router.get("/novelties", async (req, res) => {
             return { ...base, filename: item.filename, type: item.type, filePath, thumbnailUrl };
           }
           if (k === "audio") return { ...base, filename: item.filename || ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
-          if (k === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath };
+          if (k === "video") {
+            const thumbFile = `thumb_${item.id}.jpg`;
+            const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile));
+            const thumbnailUrl = thumbExists ? `/api/uploads/${thumbFile}` : null;
+            return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath, thumbnailUrl };
+          }
           return base;
         });
       })
@@ -716,7 +773,7 @@ router.get("/processed/recent", async (req, res) => {
       ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: item.filename || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, durationSeconds: item.duration ?? 0, ...normalizeAIEnrichment(item.aiEnrichment) })),
-      ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...videos.map((item) => { const thumbFile = `thumb_${item.id}.jpg`; const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile)); return { kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, thumbnailUrl: thumbExists ? `/api/uploads/${thumbFile}` : null, ...normalizeAIEnrichment(item.aiEnrichment) }; }),
     ]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, limit);
@@ -775,7 +832,12 @@ router.get("/by-kind/:kind", async (req, res) => {
       if (kind === "link") return { ...base, url: item.url, type: item.type };
       if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), filename: (item.content || "").slice(0, 80) || "Nota", type: item.type };
       if (kind === "audio") return { ...base, filename: item.filename || ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
-      if (kind === "video") return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
+      if (kind === "video") {
+        const thumbFile = `thumb_${item.id}.jpg`;
+        const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile));
+        const thumbnailUrl = thumbExists ? `/api/uploads/${thumbFile}` : null;
+        return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0, thumbnailUrl };
+      }
       return base;
     });
     res.json(list);

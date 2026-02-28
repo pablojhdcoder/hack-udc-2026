@@ -58,10 +58,16 @@ export default function FilePreview({ item }) {
   const photoThumbUrl =
     item?.thumbnailUrl ||
     (isPhoto && item?.filePath ? buildUploadThumbUrl(item.filePath) : null);
+
+  // Para vídeos locales MP4 el backend genera thumb_<id>.jpg en uploads/
+  const localVideoThumbUrl = isVideo && item?.id
+    ? `/api/uploads/thumb_${item.id}.jpg`
+    : (isVideo && item?.filePath ? buildUploadThumbUrl(item.filePath) : null);
+
   const videoThumbUrl =
     item?.thumbnailUrl ||
     (isYouTube ? `https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg` : null) ||
-    (isVideo && item?.filePath ? buildUploadThumbUrl(item.filePath) : null);
+    localVideoThumbUrl;
 
   const showPhotoImg = isPhoto && photoThumbUrl && !imgError;
   const showVideoThumb = (isVideo || isYouTube) && videoThumbUrl && !imgError;

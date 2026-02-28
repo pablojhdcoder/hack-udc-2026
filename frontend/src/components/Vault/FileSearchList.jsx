@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Search, X, FileImage, Video, FileText, File as FileIcon, Loader2, Tag, FolderOpen, Calendar, Globe, ChevronRight } from "lucide-react";
+import { useAppLanguage } from "../../context/LanguageContext";
+import { translations } from "../../i18n/translations";
 
 // Vista de lista de archivos conectada a backend real con búsqueda semántica
 // Endpoint esperado: GET /api/archivos?q=<query>
@@ -42,10 +44,10 @@ function Thumbnail({ type, thumbnailUrl, alt }) {
 function formatDate(iso) {
   if (!iso) return null;
   const d = new Date(iso);
-  return d.toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
-function MetadataSheet({ item, onClose }) {
+function MetadataSheet({ item, onClose, vt }) {
   if (!item) return null;
 
   const topics = item.aiTopics ?? item.aiTags ?? item.tags ?? [];
@@ -64,7 +66,7 @@ function MetadataSheet({ item, onClose }) {
         onKeyDown={(e) => e.key === "Escape" && onClose()}
         role="button"
         tabIndex={0}
-        aria-label="Cerrar"
+        aria-label={vt.closeSearchAria}
       />
       {/* Sheet */}
       <div className="fixed bottom-0 left-0 right-0 z-50 max-w-[430px] mx-auto pointer-events-none">
@@ -82,7 +84,7 @@ function MetadataSheet({ item, onClose }) {
               type="button"
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors shrink-0"
-              aria-label="Cerrar"
+              aria-label={vt.closeSearchAria}
             >
               <X className="w-4 h-4" />
             </button>
@@ -92,7 +94,7 @@ function MetadataSheet({ item, onClose }) {
             {/* Resumen */}
             {summary && (
               <div className="rounded-xl bg-neutral-800/70 border border-neutral-700/50 px-4 py-3">
-                <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider mb-1">Resumen</p>
+                <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider mb-1">{vt.summary}</p>
                 <p className="text-sm text-neutral-200 leading-relaxed">{summary}</p>
               </div>
             )}
@@ -120,7 +122,7 @@ function MetadataSheet({ item, onClose }) {
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <Tag className="w-3.5 h-3.5 text-neutral-500" />
-                  <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider">Temas</span>
+                  <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider">{vt.topics}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {topics.map((tag) => (
@@ -157,7 +159,10 @@ function MetadataSheet({ item, onClose }) {
   );
 }
 
-export default function FileSearchList({ title = "El baúl de las ideas" }) {
+export default function FileSearchList({ title }) {
+  const { locale } = useAppLanguage();
+  const vt = translations[locale]?.vault ?? translations.es.vault;
+  const resolvedTitle = title ?? vt.title;
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -244,7 +249,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
               type="button"
               onClick={handleCloseSearch}
               className="p-2 -ml-2 rounded-full hover:bg-neutral-800 text-zinc-400 shrink-0"
-              aria-label="Cerrar búsqueda"
+              aria-label={vt.closeSearchAria}
             >
               <X className="w-5 h-5" />
             </button>
@@ -253,20 +258,20 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
               type="search"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar por nombre, ruta o etiquetas…"
+              placeholder={vt.searchPlaceholder}
               className="bg-gray-800 text-white px-4 py-1.5 rounded-full w-full outline-none focus:ring-2 focus:ring-blue-500 text-sm placeholder:text-zinc-400"
             />
           </div>
         ) : (
           <>
             <h1 className="flex-1 text-center text-lg font-semibold text-zinc-50 truncate px-2">
-              {title}
+              {resolvedTitle}
             </h1>
             <button
               type="button"
               onClick={handleOpenSearch}
               className="p-2 -mr-2 rounded-full hover:bg-neutral-800 text-zinc-400"
-              aria-label="Buscar"
+              aria-label={vt.searchAria}
             >
               <Search className="w-5 h-5" />
             </button>
@@ -279,7 +284,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
         {isLoading && (
           <div className="flex items-center gap-2 text-sm text-zinc-400">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Buscando en tu cerebro digital...</span>
+            <span>{vt.searching}</span>
           </div>
         )}
 
@@ -290,7 +295,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
         )}
 
         {!isLoading && !hasResults && !error && (
-          <p className="text-sm text-zinc-500">No se han encontrado archivos.</p>
+          <p className="text-sm text-zinc-500">{vt.noResults}</p>
         )}
 
         {hasResults && (
@@ -309,7 +314,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-zinc-50 truncate">
-                      {item.filename || "Sin nombre"}
+                      {item.filename || vt.untitled}
                     </p>
                     <p className="text-[11px] text-zinc-400 truncate">
                       {item.filepath || "Ruta desconocida"}
@@ -336,7 +341,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
       </main>
 
       {selectedItem && (
-        <MetadataSheet item={selectedItem} onClose={() => setSelectedItem(null)} />
+        <MetadataSheet item={selectedItem} onClose={() => setSelectedItem(null)} vt={vt} />
       )}
     </div>
   );

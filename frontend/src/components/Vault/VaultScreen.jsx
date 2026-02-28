@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X, Tag, FolderOpen, Globe, Calendar } from "lucide-react";
 import FilePreview from "../shared/FilePreview";
+import { useAppLanguage } from "../../context/LanguageContext";
+import { translations } from "../../i18n/translations";
 import {
   getVaultFolders,
   getProcessedRecent,
@@ -27,17 +29,6 @@ const ICON_BY_KIND = {
   favorite: Star,
 };
 
-const KIND_LABEL = {
-  note: "Notas",
-  link: "Enlaces",
-  file: "Archivos",
-  photo: "Fotos",
-  audio: "Audio",
-  video: "Video",
-  novelty: "Novedades",
-  favorite: "Favoritos",
-};
-
 const rowButtonClass =
   "w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-neutral-800/60 dark:border-neutral-700/50 dark:hover:bg-neutral-800/80";
 
@@ -55,9 +46,9 @@ function getItemDisplayTitle(item) {
   return item?.title ?? item?.url?.slice(0, 40) ?? (item?.content?.slice(0, 50) || "Sin título");
 }
 
-function VaultListItem({ item, onSelect, searchTokens }) {
+function VaultListItem({ item, onSelect, searchTokens, isFavorited, vt }) {
   const displayName = getItemDisplayTitle(item);
-  const formattedDate = formatDate(item.createdAt);
+  const formattedDate = formatDate(item.createdAt, vt);
 
   // Un solo origen de temas: aiTopics (backend envía aiTags = aiTopics)
   const topicsList = item.aiTopics ?? item.aiTags ?? [];
@@ -76,7 +67,14 @@ function VaultListItem({ item, onSelect, searchTokens }) {
   return (
     <li>
       <button type="button" onClick={() => onSelect(item)} className={rowButtonClass}>
-        <FilePreview item={item} />
+        <div className="relative flex-shrink-0">
+          <FilePreview item={item} />
+          {(item.kind === "favorite" || isFavorited) && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center shadow-sm">
+              <Star className="w-2.5 h-2.5 text-white fill-white" />
+            </span>
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
           <div className="flex flex-wrap items-center mt-1 gap-x-2 gap-y-1">
@@ -121,19 +119,21 @@ function VaultListItem({ item, onSelect, searchTokens }) {
   );
 }
 
-function formatDate(iso) {
+function formatDate(iso, vt) {
   if (!iso) return "";
   const d = new Date(iso);
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-  if (d >= today) return "Hoy";
-  if (d >= yesterday) return "Ayer";
-  if (now - d < 7 * 24 * 60 * 60 * 1000) return "Esta semana";
-  return d.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+  if (d >= today) return vt.dateToday;
+  if (d >= yesterday) return vt.dateYesterday;
+  if (now - d < 7 * 24 * 60 * 60 * 1000) return vt.dateThisWeek;
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
 export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
+  const { locale } = useAppLanguage();
+  const vt = translations[locale]?.vault ?? translations.es.vault;
   const [folders, setFolders] = useState([]);
   const [recent, setRecent] = useState([]);
   const [weeklyWrapped, setWeeklyWrapped] = useState([]);
@@ -155,6 +155,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [favoriteIds, setFavoriteIds] = useState(new Set());
   const searchInputRef = useRef(null);
   const lastOpenedKeyRef = useRef(null);
   const initialAppliedRef = useRef(false);
@@ -197,8 +198,14 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     setLoadingKind(true);
     setError(null);
     try {
-      const list = await fetchFolderItems(kind);
+      const [list, favs] = await Promise.all([
+        fetchFolderItems(kind),
+        kind !== "favorite" ? getFavorites() : Promise.resolve([]),
+      ]);
       setItemsByKind(Array.isArray(list) ? list : []);
+      if (kind !== "favorite") {
+        setFavoriteIds(new Set((Array.isArray(favs) ? favs : []).map((f) => f.sourceId)));
+      }
     } catch (err) {
       setError(err?.message ?? "Error al cargar");
       setItemsByKind([]);
@@ -249,7 +256,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
       }
       setSelectedItem(null);
       setShowDeleteConfirm(false);
-      setToastMessage("Eliminado correctamente");
+      setToastMessage(vt.deleted);
       setTimeout(() => setToastMessage(null), 2500);
       await load();
       if (selectedKind) {
@@ -334,11 +341,13 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
       if (favoriteCheck.favorited) {
         await removeFromFavorites(favoriteCheck.favoriteId);
         setFavoriteCheck({ favorited: false, favoriteId: null });
-        setToastMessage("Eliminado de favoritos");
+        setFavoriteIds((prev) => { const next = new Set(prev); next.delete(selectedItem.id); return next; });
+        setToastMessage(vt.removedFavorite);
       } else {
         const created = await addToFavorites(selectedItem.kind, selectedItem.id);
         setFavoriteCheck({ favorited: true, favoriteId: created.id });
-        setToastMessage("Añadido a favoritos");
+        setFavoriteIds((prev) => new Set([...prev, selectedItem.id]));
+        setToastMessage(vt.addedFavorite);
       }
       await load();
       if (selectedKind === "favorite") {
@@ -360,7 +369,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     setError(null);
     try {
       await removeFromFavorites(selectedItem.id);
-      setToastMessage("Eliminado de favoritos");
+      setToastMessage(vt.removedFavorite);
       setSelectedItem(null);
       await load();
       if (selectedKind === "favorite") {
@@ -375,7 +384,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     }
   }, [selectedItem, togglingFavorite, load, selectedKind]);
 
-  const selectedLabel = selectedKind ? (KIND_LABEL[selectedKind] || selectedKind) : null;
+  const selectedLabel = selectedKind ? (vt.kindLabels[selectedKind] || selectedKind) : null;
 
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus();
@@ -458,7 +467,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               type="button"
               onClick={handleCloseSearch}
               className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800 shrink-0"
-              aria-label="Cerrar búsqueda"
+              aria-label={vt.closeSearchAria}
             >
               <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
             </button>
@@ -468,16 +477,16 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-              placeholder={folderViewActive && selectedLabel ? `Buscar en ${selectedLabel}…` : "Buscar en el baúl (por nombre o tema)…"}
+              placeholder={folderViewActive && selectedLabel ? vt.searchInFolderPlaceholder.replace("{folder}", selectedLabel) : vt.searchPlaceholder}
               className="flex-1 min-w-0 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50"
-              aria-label="Buscar"
+              aria-label={vt.searchAria}
             />
             <button
               type="button"
               onClick={handleBuscar}
               className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium shrink-0"
             >
-              Buscar
+              {vt.searchBtn}
             </button>
           </div>
         ) : folderViewActive ? (
@@ -492,19 +501,19 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 }
               }}
               className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-              aria-label="Volver"
+              aria-label={vt.backAria}
             >
               <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
             </button>
             <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
-              {selectedLabel ?? "Carpeta"}
+              {selectedLabel ?? vt.folders}
             </h1>
             <div className="flex items-center gap-0">
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
                 className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-                aria-label="Buscar"
+                aria-label={vt.searchAria}
               >
                 <Search className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
               </button>
@@ -520,7 +529,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                   }
                 }}
                 className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-                aria-label="Recargar"
+                aria-label={vt.reloadAria}
               >
                 <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
               </button>
@@ -532,19 +541,19 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               type="button"
               onClick={handleBack}
               className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-              aria-label="Volver"
+              aria-label={vt.backAria}
             >
               <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
             </button>
             <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
-              El baúl de las ideas
+              {vt.title}
             </h1>
             <div className="flex items-center gap-0">
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
                 className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-                aria-label="Buscar"
+                aria-label={vt.searchAria}
               >
                 <Search className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
               </button>
@@ -552,7 +561,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 type="button"
                 onClick={() => load()}
                 className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
-                aria-label="Recargar"
+                aria-label={vt.reloadAria}
               >
                 <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
               </button>
@@ -573,14 +582,14 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             searchLoading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm">Buscando en la carpeta…</p>
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm">{vt.searchingFolder}</p>
               </div>
             ) : searchResults.length === 0 ? (
-              <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No se encontraron resultados en esta carpeta.</p>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">{vt.noResultsInFolder}</p>
             ) : (
               <div className="flex-1 min-h-0 flex flex-col">
                 <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-3">
-                  {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""} · ordenados por relevancia
+                  {searchResults.length === 1 ? vt.resultCount.replace("{count}", 1) : vt.resultCountPlural.replace("{count}", searchResults.length)}
                 </p>
                 <ul className="space-y-2">
                   {searchResults.map((item) => {
@@ -591,6 +600,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         item={item}
                         onSelect={setSelectedItem}
                         searchTokens={tokens}
+                        vt={vt}
                       />
                     );
                   })}
@@ -600,35 +610,35 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           ) : loadingKind ? (
             <div className="flex flex-col items-center justify-center py-16">
               <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
-              <p className="text-zinc-500 text-sm">Cargando…</p>
+              <p className="text-zinc-500 text-sm">{vt.loadingFolder}</p>
             </div>
           ) : itemsByKind.length === 0 ? (
-            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No hay ítems en esta carpeta.</p>
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">{vt.noItemsInFolder}</p>
           ) : (
             <ul className="space-y-2">
               {itemsByKind.map((item) => (
-                <VaultListItem key={`${item.kind}-${item.id}`} item={item} onSelect={setSelectedItem} />
+                <VaultListItem key={`${item.kind}-${item.id}`} item={item} onSelect={setSelectedItem} isFavorited={item.kind !== "favorite" && favoriteIds.has(item.id)} vt={vt} />
               ))}
             </ul>
           )
         ) : loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
-            <p className="text-zinc-500 text-sm">Cargando carpetas…</p>
+            <p className="text-zinc-500 text-sm">{vt.loading}</p>
           </div>
         ) : searchTerm.trim() ? (
           <div className="flex-1 min-h-0 flex flex-col">
             {searchLoading ? (
               <div className="flex flex-col items-center justify-center py-16">
                 <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm">Buscando en tu cerebro digital…</p>
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm">{vt.searching}</p>
               </div>
             ) : searchResults.length === 0 ? (
-              <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No se han encontrado resultados.</p>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">{vt.noResults}</p>
             ) : (
               <>
                 <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-3">
-                  {searchResults.length} resultado{searchResults.length !== 1 ? "s" : ""} · ordenados por relevancia
+                  {searchResults.length === 1 ? vt.resultCount.replace("{count}", 1) : vt.resultCountPlural.replace("{count}", searchResults.length)}
                 </p>
                 <ul className="space-y-2">
                   {searchResults.map((item) => {
@@ -639,6 +649,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         item={item}
                         onSelect={setSelectedItem}
                         searchTokens={tokens}
+                        vt={vt}
                       />
                     );
                   })}
@@ -650,7 +661,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           <>
             <section>
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
-                Carpetas
+                {vt.folders}
               </h2>
               <div className="grid grid-cols-2 gap-2">
                 {[...folders].sort((a, b) => {
@@ -658,7 +669,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                   return (priority[a.kind] ?? 2) - (priority[b.kind] ?? 2);
                 }).map((f) => {
                   const Icon = ICON_BY_KIND[f.kind] ?? FileText;
-                  const label = f.name || KIND_LABEL[f.kind] || f.kind;
+                  const label = f.name || vt.kindLabels[f.kind] || f.kind;
                   return (
                     <button
                       key={f.kind}
@@ -673,7 +684,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         {label}
                       </span>
                       <span className="text-zinc-500 dark:text-zinc-400 text-xs tabular-nums">
-                        {f.count} {f.count === 1 ? "ítem" : "ítems"}
+                        {f.count} {f.count === 1 ? vt.item : vt.items}
                       </span>
                     </button>
                   );
@@ -684,15 +695,16 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             {weeklyWrapped.length > 0 && (
               <section>
                 <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
-                  Tus hits de la semana
+                  {vt.weeklyHits}
                 </h2>
                 <p className="text-zinc-600 dark:text-zinc-400 text-sm mb-3">
-                  Lo que más has abierto en los últimos 7 días
+                  {vt.weeklySubtitle}
                 </p>
                 <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 scrollbar-hide snap-x snap-mandatory">
                   {weeklyWrapped.map((item, idx) => {
                     const Icon = ICON_BY_KIND[item.kind] ?? FileText;
                     const displayName = getItemDisplayTitle(item);
+                    const openCount = item.openedCount ?? 0;
                     return (
                       <button
                         key={`wrapped-${item.kind}-${item.id}`}
@@ -708,7 +720,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         </div>
                         <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate leading-tight">{displayName}</p>
                         <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-1">
-                          {item.openedCount} {item.openedCount === 1 ? "apertura" : "aperturas"} esta semana
+                          {openCount === 1 ? vt.openingsThisWeek.replace("{count}", 1) : vt.openingsThisWeekPlural.replace("{count}", openCount)}
                         </p>
                       </button>
                     );
@@ -719,14 +731,14 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
 
             <section>
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
-                Procesados recientes
+                {vt.recentlyProcessed}
               </h2>
               {recent.length === 0 ? (
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">Aún no hay ítems procesados.</p>
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">{vt.noRecentItems}</p>
               ) : (
                 <ul className="space-y-2">
                   {recent.map((item) => (
-                    <VaultListItem key={`${item.kind}-${item.id}`} item={item} onSelect={setSelectedItem} />
+                    <VaultListItem key={`${item.kind}-${item.id}`} item={item} onSelect={setSelectedItem} vt={vt} />
                   ))}
                 </ul>
               )}
@@ -761,7 +773,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
             {showDeleteConfirm ? (
               <>
                 <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
-                  ¿Seguro que quieres eliminarlo?
+                  {vt.deleteConfirm}
                 </p>
                 <div className="flex gap-3">
                   <button
@@ -770,7 +782,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     disabled={deleting}
                     className="flex-1 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium disabled:opacity-50"
                   >
-                    Cancelar
+                    {vt.cancel}
                   </button>
                   <button
                     type="button"
@@ -778,7 +790,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     disabled={deleting}
                     className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aceptar"}
+                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : vt.accept}
                   </button>
                 </div>
               </>
@@ -789,20 +801,20 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
 
                 {/* Título */}
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-white leading-snug mb-4">
-                  {getItemDisplayTitle(selectedItem) || "Ítem"}
+                  {getItemDisplayTitle(selectedItem) || vt.untitled}
                 </h2>
 
-                {/* Metadata IA — mismas secciones en todas las carpetas */}
+                {/* Metadata IA */}
                 <div className="space-y-3 mb-4">
-                  {/* Resumen — siempre visible */}
+                  {/* Resumen */}
                   <div className="rounded-xl bg-zinc-50 dark:bg-neutral-800/70 border border-zinc-200 dark:border-neutral-700/50 px-4 py-3">
-                    <p className="text-xs text-zinc-500 dark:text-neutral-400 font-medium uppercase tracking-wider mb-1">Resumen</p>
+                    <p className="text-xs text-zinc-500 dark:text-neutral-400 font-medium uppercase tracking-wider mb-1">{vt.summary}</p>
                     <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed">
-                      {selectedItem.aiSummary && selectedItem.aiSummary.trim() ? selectedItem.aiSummary : "—"}
+                      {selectedItem.aiSummary && selectedItem.aiSummary.trim() ? selectedItem.aiSummary : vt.noSummary}
                     </p>
                   </div>
 
-                  {/* Categoría + Idioma — siempre visible */}
+                  {/* Categoría + Idioma */}
                   <div className="flex flex-wrap gap-2">
                     {selectedItem.aiCategory ? (
                       <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-500/30 rounded-full px-3 py-1.5">
@@ -817,15 +829,15 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                       </div>
                     ) : null}
                     {!selectedItem.aiCategory && !selectedItem.aiLanguage ? (
-                      <span className="text-xs text-zinc-400 dark:text-neutral-500">—</span>
+                      <span className="text-xs text-zinc-400 dark:text-neutral-500">{vt.noSummary}</span>
                     ) : null}
                   </div>
 
-                  {/* Temas — siempre visible */}
+                  {/* Temas */}
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <Tag className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
-                      <span className="text-xs text-zinc-500 dark:text-neutral-500 font-medium uppercase tracking-wider">Temas</span>
+                      <span className="text-xs text-zinc-500 dark:text-neutral-500 font-medium uppercase tracking-wider">{vt.topics}</span>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).length > 0
@@ -837,17 +849,17 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                               #{String(tag).trim().toLowerCase()}
                             </span>
                           ))
-                        : <span className="text-xs text-zinc-400 dark:text-neutral-500">—</span>}
+                        : <span className="text-xs text-zinc-400 dark:text-neutral-500">{vt.noSummary}</span>}
                     </div>
                   </div>
 
-                  {/* Fecha — siempre visible */}
+                  {/* Fecha */}
                   <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-neutral-500">
                     <Calendar className="w-3.5 h-3.5 shrink-0" />
                     <span>
                       {selectedItem.createdAt
-                        ? new Date(selectedItem.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "long", year: "numeric" })
-                        : "—"}
+                        ? new Date(selectedItem.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
+                        : vt.noSummary}
                     </span>
                   </div>
                 </div>
@@ -856,7 +868,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 {isNoteItem && (
                   <div className="mb-4">
                     <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-2">
-                      Ver nota
+                      {vt.viewNote}
                     </p>
                     <div className="rounded-xl border border-zinc-200 dark:border-neutral-700 bg-zinc-50 dark:bg-neutral-800/80 p-3 max-h-48 overflow-y-auto scrollbar-hide">
                       {loadingNote ? (
@@ -865,7 +877,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         </div>
                       ) : (
                         <p className="text-zinc-800 dark:text-zinc-200 text-sm whitespace-pre-wrap break-words">
-                          {fullNoteContent ?? selectedItem.content ?? "—"}
+                          {fullNoteContent ?? selectedItem.content ?? vt.noSummary}
                         </p>
                       )}
                     </div>
@@ -879,36 +891,32 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                       className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-brand-500/50 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-sm font-medium flex items-center justify-center gap-2"
                     >
                       <ExternalLink className="w-4 h-4" />
-                      {selectedItem.url ? "Abrir enlace" : (selectedItem.kind === "photo" || selectedItem.sourceKind === "photo") ? "Abrir imagen" : (selectedItem.kind === "video" || selectedItem.sourceKind === "video") ? "Ver video" : "Ver archivo"}
+                      {selectedItem.url ? vt.openLink : (selectedItem.kind === "photo" || selectedItem.sourceKind === "photo") ? vt.openImage : (selectedItem.kind === "video" || selectedItem.sourceKind === "video") ? vt.openVideo : vt.openFile}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedItem(null)}
-                    disabled={togglingFavorite}
-                    className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
                   {isFavoriteItem ? (
                     <button
                       type="button"
                       onClick={handleQuitarDeFavoritos}
                       disabled={togglingFavorite}
-                      className="flex-1 min-w-[100px] py-2.5 pl-3 pr-4 rounded-xl border border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400 text-sm font-medium flex items-center justify-start gap-2 disabled:opacity-50"
+                      className="flex-1 min-w-[100px] py-2.5 pl-3 pr-4 rounded-xl bg-amber-400 dark:bg-amber-500 text-white text-sm font-medium flex items-center justify-start gap-2 disabled:opacity-50"
                     >
-                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Star className="w-4 h-4 flex-shrink-0" />}
-                      Quitar de favoritos
+                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Star className="w-4 h-4 flex-shrink-0 fill-white" />}
+                      {vt.removeFavorite}
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={handleToggleFavorite}
                       disabled={togglingFavorite}
-                      className="flex-1 min-w-[100px] py-2.5 pl-3 pr-4 rounded-xl border border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400 text-sm font-medium flex items-center justify-start gap-2 disabled:opacity-50"
+                      className={`flex-1 min-w-[100px] py-2.5 pl-3 pr-4 rounded-xl text-sm font-medium flex items-center justify-start gap-2 disabled:opacity-50 ${
+                        favoriteCheck.favorited
+                          ? "bg-amber-400 dark:bg-amber-500 text-white"
+                          : "border border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400"
+                      }`}
                     >
-                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Star className="w-4 h-4 flex-shrink-0" />}
-                      {favoriteCheck.favorited ? "Quitar de favoritos" : "Añadir a favoritos"}
+                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Star className={`w-4 h-4 flex-shrink-0 ${favoriteCheck.favorited ? "fill-white" : ""}`} />}
+                      {favoriteCheck.favorited ? vt.removeFavorite : vt.addFavorite}
                     </button>
                   )}
                   <button
@@ -918,7 +926,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     className="flex-1 min-w-[100px] py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     <Trash2 className="w-4 h-4" />
-                    Eliminar
+                    {vt.delete}
                   </button>
                 </div>
               </>

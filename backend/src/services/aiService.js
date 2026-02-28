@@ -365,15 +365,20 @@ ${content.slice(0, 4000)}
 // ──────────────────────────────────────────────
 
 export async function enrichLink(url, existingPreview = {}) {
-  const previewContext =
-    Object.keys(existingPreview).length > 0
-      ? `Metadatos Open Graph ya extraídos:\n- Título: ${existingPreview.title ?? "N/A"}\n- Descripción: ${existingPreview.description ?? "N/A"}`
-      : "No hay metadatos previos disponibles.";
+  const hasPreview = Object.keys(existingPreview).length > 0;
+  const previewContext = hasPreview
+    ? `Metadatos Open Graph ya extraídos:\n- Título: ${existingPreview.title ?? "N/A"}\n- Descripción: ${existingPreview.description ?? "N/A"}`
+    : "No hay metadatos previos disponibles.";
 
-  const instruction = `Analiza el siguiente enlace y sus metadatos disponibles para clasificarlo.
+  // Si Firecrawl extrajo markdown, incluirlo como contexto rico (truncado a 6000 chars)
+  const markdownContext = existingPreview.markdown
+    ? `\n\nContenido completo de la página (markdown):\n"""\n${existingPreview.markdown.slice(0, 6000)}\n"""`
+    : "";
+
+  const instruction = `Analiza el siguiente enlace y su contenido para clasificarlo y generar metadatos ricos.
 
 URL: ${url}
-${previewContext}`;
+${previewContext}${markdownContext}`;
 
   const azureFn = () =>
     azureGenerateContent([
@@ -641,25 +646,27 @@ const CURRENT_DATE_STR = () => new Date().toISOString().slice(0, 10);
  * @param {string} content - Texto a analizar (nota, título+URL, etc.)
  * @returns {Promise<Array<{title, date, time, description}>>} Array vacío si no hay eventos.
  */
-export async function detectCalendarEvents(content) {
-  const instruction = `Analiza el siguiente texto y detecta si contiene eventos de calendario: citas, reuniones, recordatorios, deadlines, cumpleaños, eventos, plazos u otras fechas importantes.
+export async function detectCalendarEvents(content, { maxChars = 4000 } = {}) {
+  const instruction = `Analiza el siguiente texto y detecta si contiene eventos de calendario: citas médicas, consultas, reuniones, recordatorios, deadlines, cumpleaños, eventos, plazos u otras fechas importantes.
 
 Fecha actual: ${CURRENT_DATE_STR()}
 
 TEXTO:
 """
-${content.slice(0, 3000)}
+${content.slice(0, maxChars)}
 """
 
 Si el texto contiene uno o varios eventos de calendario, extráelos.
 Si NO contiene ningún evento con fecha concreta, devuelve un array vacío: [].
 
 IMPORTANTE:
+- Presta especial atención a citas médicas, consultas con especialistas, analíticas, pruebas diagnósticas y revisiones. Si el documento es de ese tipo, SIEMPRE extrae el evento.
 - Solo extrae eventos con una fecha identificable (explícita o claramente deducible del contexto).
 - Si hay una hora, inclúyela en formato HH:MM de 24h.
 - Si no hay hora, usa null.
 - Las fechas relativas ("mañana", "el lunes", "la próxima semana") deben convertirse a fecha absoluta YYYY-MM-DD usando la fecha actual como referencia.
 - No inventes fechas que no aparezcan en el texto.
+- En el campo "description" incluye detalles relevantes: médico, especialidad, lugar, sala, número de paciente, etc.
 
 Responde ÚNICAMENTE con un array JSON válido:
 ${CALENDAR_SCHEMA}`;

@@ -1,33 +1,14 @@
 import { useState } from "react";
 import { ArrowLeft, ChevronDown, LifeBuoy, Mail } from "lucide-react";
-
-const faqCategories = [
-  {
-    category: "Conceptos Básicos",
-    items: [
-      { q: "¿Qué es el Cerebro Digital?", a: "Es tu asistente personal inteligente. Captura notas, audios, imágenes o enlaces, y nuestra IA los procesará, resumirá y organizará por ti automáticamente." },
-      { q: "¿Qué significa 'Procesar' una nota?", a: "Al capturar una idea, se guarda en tu bandeja. Al pulsar 'Procesar', la IA lee el contenido, asigna etiquetas (hashtags), genera un resumen y lo archiva en tu Baúl de forma ordenada." },
-    ],
-  },
-  {
-    category: "Funciones Inteligentes",
-    items: [
-      { q: "¿Cómo funciona el Calendario automático?", a: "Si al procesar una nota la IA detecta una fecha o evento (ej. 'Cita médica el jueves'), te propondrá añadirlo directamente a tu calendario interno con un solo clic." },
-      { q: "¿Cómo busco mis ideas?", a: "Usa el buscador semántico. No necesitas recordar el nombre del archivo; busca por conceptos (ej. 'ideas para el hackathon' o 'apuntes de mates') y la IA encontrará lo relacionado." },
-      { q: "¿Qué tipo de archivos detecta la IA?", a: "Puedes subir texto, audios (los transcribiremos), fotos, documentos y enlaces (incluyendo vídeos de YouTube). Extraeremos el contexto de todos ellos." },
-    ],
-  },
-  {
-    category: "Cuenta y Privacidad",
-    items: [
-      { q: "¿Son privados mis datos?", a: "Absolutamente. Tus archivos están encriptados en tu bóveda. La IA solo accede a ellos de forma segura para generar tus resúmenes locales, sin entrenar modelos públicos." },
-      { q: "¿Puedo exportar mi información?", a: "Sí. Tu información es tuya. En la sección de Ajustes, usa 'Exportar mis notas' para descargar todo tu contenido cuando quieras." },
-    ],
-  },
-];
+import { useAppLanguage } from "../../context/LanguageContext";
+import { translations } from "../../i18n/translations";
 
 export default function CentroAyudaView({ onBack, onContactEmail }) {
+  const { t, locale } = useAppLanguage();
   const [expandedId, setExpandedId] = useState(null);
+
+  const hc = translations[locale]?.helpCenter ?? translations.es.helpCenter;
+  const faqCategories = hc.categories;
 
   const toggle = (id) => {
     setExpandedId((prev) => (prev === id ? null : id));
@@ -40,18 +21,18 @@ export default function CentroAyudaView({ onBack, onContactEmail }) {
           type="button"
           onClick={onBack}
           className="p-2 -ml-2 rounded-lg hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors"
-          aria-label="Volver"
+          aria-label={hc.backAria}
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="flex-1 text-center text-lg font-semibold text-white">Centro de Ayuda</h1>
+        <h1 className="flex-1 text-center text-lg font-semibold text-white">{hc.title}</h1>
         <div className="flex items-center justify-end w-10">
           <LifeBuoy className="w-5 h-5 text-neutral-500" />
         </div>
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-5 scrollbar-hide">
-        {faqCategories.map((cat, catIndex) => (
+        {Array.isArray(faqCategories) && faqCategories.map((cat, catIndex) => (
           <section key={catIndex}>
             <h2 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider mb-3 mt-6 ml-1 first:mt-0">
               {cat.category}
@@ -86,9 +67,9 @@ export default function CentroAyudaView({ onBack, onContactEmail }) {
         ))}
 
         <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-5 mt-8 text-center">
-          <p className="text-white font-medium mb-1">¿No encuentras lo que buscas?</p>
+          <p className="text-white font-medium mb-1">{hc.notFoundTitle}</p>
           <p className="text-sm text-neutral-400 mb-4">
-            Nuestro equipo de soporte está listo para ayudarte.
+            {hc.notFoundBody}
           </p>
           <button
             type="button"
@@ -96,12 +77,12 @@ export default function CentroAyudaView({ onBack, onContactEmail }) {
             className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-medium transition-colors"
           >
             <Mail className="w-5 h-5" />
-            Enviar un correo
+            {hc.contactButton}
           </button>
         </div>
 
         <div className="text-center text-[10px] font-medium text-neutral-600 mt-8 mb-4 uppercase tracking-widest">
-          Cerebro Digital v1.0.0 • Kelea HackUDC
+          Riki Brain v1.0.0 • Kelea HackUDC
         </div>
       </main>
     </div>

@@ -1,7 +1,7 @@
-import { X, Inbox, FolderOpen, Calendar, Settings } from "lucide-react";
+import { X, Inbox, FolderOpen, Calendar, Settings, Brain } from "lucide-react";
 import { useAppLanguage } from "../../context/LanguageContext";
 
-export default function Sidebar({ isOpen, onClose, onNavigate }) {
+export default function Sidebar({ isOpen, onClose, onNavigate, onOpenChat }) {
   const { t } = useAppLanguage();
   return (
     <>
@@ -27,7 +27,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
         aria-hidden={!isOpen}
       >
         <div className="flex items-center justify-between h-14 px-4 border-b border-zinc-200 shrink-0 dark:border-zinc-800">
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{t("sidebar.appName")}</span>
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{t("Riki Brain")}</span>
           <button
             type="button"
             onClick={onClose}
@@ -61,6 +61,14 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
           >
             <Calendar className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             {t("sidebar.calendar")}
+          </button>
+          <button
+            type="button"
+            onClick={() => { onClose(); onOpenChat?.(); }}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
+          >
+            <Brain className="w-5 h-5 text-blue-500" />
+            Chatbot
           </button>
           <div className="flex-1" />
           <button
