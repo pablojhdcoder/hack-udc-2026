@@ -8,6 +8,7 @@ const CARD_MAP = {
   link: LinkCard,
   audio: VoiceNoteCard,
   file: FileCard,
+  photo: FileCard,
 };
 
 export default function InboxCard({ item }) {
