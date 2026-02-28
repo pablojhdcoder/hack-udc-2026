@@ -54,7 +54,7 @@ export default function Header({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleBuscar()}
-          placeholder="Buscar en el inbox..."
+          placeholder="Buscar en la fábrica de las ideas..."
           className="flex-1 bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2.5 text-zinc-900 placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-brand-500/50 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-500"
           aria-label="Buscar"
         />
@@ -79,7 +79,7 @@ export default function Header({
       >
         <Menu className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
       </button>
-      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Tu Inbox</h1>
+      <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">La fábrica de las ideas</h1>
       <div className="flex items-center gap-1">
         <button
           type="button"

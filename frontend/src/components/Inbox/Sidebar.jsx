@@ -42,7 +42,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
           >
             <Inbox className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
-            Tu Inbox
+            La fábrica de las ideas
           </button>
           <button
             type="button"

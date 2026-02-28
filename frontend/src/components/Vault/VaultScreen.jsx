@@ -55,6 +55,7 @@ export default function VaultScreen({ onBack }) {
   const [togglingFavorite, setTogglingFavorite] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [folderViewActive, setFolderViewActive] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +82,7 @@ export default function VaultScreen({ onBack }) {
 
   const handleFolderClick = useCallback(async (kind) => {
     setSelectedKind(kind);
+    setFolderViewActive(true);
     setLoadingKind(true);
     setError(null);
     try {
@@ -92,6 +94,12 @@ export default function VaultScreen({ onBack }) {
     } finally {
       setLoadingKind(false);
     }
+  }, []);
+
+  const handleBackFromFolder = useCallback(() => {
+    setFolderViewActive(false);
+    setSelectedKind(null);
+    setItemsByKind([]);
   }, []);
 
   const handleBack = useCallback(() => onBack(), [onBack]);
@@ -200,25 +208,59 @@ export default function VaultScreen({ onBack }) {
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
       <header className="shrink-0 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
-        <button
-          type="button"
-          onClick={handleBack}
-          className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          aria-label="Volver"
-        >
-          <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
-        </button>
-        <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
-          Tu Cerebro
-        </h1>
-        <button
-          type="button"
-          onClick={() => load()}
-          className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          aria-label="Recargar"
-        >
-          <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
-        </button>
+        {folderViewActive ? (
+          <>
+            <button
+              type="button"
+              onClick={handleBackFromFolder}
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Volver"
+            >
+              <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
+            </button>
+            <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
+              {selectedLabel ?? "Carpeta"}
+            </h1>
+            <button
+              type="button"
+              onClick={async () => {
+                setLoadingKind(true);
+                try {
+                  const list = selectedKind === "favorite" ? await getFavorites() : await getInboxByKind(selectedKind);
+                  setItemsByKind(Array.isArray(list) ? list : []);
+                } finally {
+                  setLoadingKind(false);
+                }
+              }}
+              className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Recargar"
+            >
+              <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={handleBack}
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Volver"
+            >
+              <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
+            </button>
+            <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate px-2">
+              El baúl de las ideas
+            </h1>
+            <button
+              type="button"
+              onClick={() => load()}
+              className="p-2 -mr-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Recargar"
+            >
+              <RefreshCw className="w-5 h-5 text-zinc-500 dark:text-zinc-400" />
+            </button>
+          </>
+        )}
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-5 space-y-6 scrollbar-hide">
@@ -228,7 +270,45 @@ export default function VaultScreen({ onBack }) {
           </div>
         )}
 
-        {loading ? (
+        {folderViewActive ? (
+          loadingKind ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
+              <p className="text-zinc-500 text-sm">Cargando…</p>
+            </div>
+          ) : itemsByKind.length === 0 ? (
+            <p className="text-zinc-500 dark:text-zinc-400 text-sm py-8">No hay ítems en esta carpeta.</p>
+          ) : (
+            <ul className="space-y-2">
+              {itemsByKind.map((item) => {
+                const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
+                const displayName = item.filename ?? item.title ?? item.url?.slice(0, 40) ?? (item.content?.slice(0, 50) || "Sin título");
+                const statusLabel = item.kind === "favorite"
+                  ? (item.sourceKind ? KIND_LABEL[item.sourceKind] || item.sourceKind : "")
+                  : (item.inboxStatus === "processed" ? (item.processedPath || "Procesado") : "Pendiente");
+                const typeLabel = item.type ? ` · ${item.type}` : "";
+                return (
+                  <li key={`${item.kind}-${item.id}`}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItem(item)}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
+                    >
+                      <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">{displayName}</p>
+                        <p className="text-zinc-500 dark:text-zinc-400 text-xs truncate">{statusLabel}{typeLabel} · {formatDate(item.createdAt)}</p>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Loader2 className="w-10 h-10 text-brand-500 animate-spin mb-3" />
             <p className="text-zinc-500 text-sm">Cargando carpetas…</p>
@@ -265,63 +345,6 @@ export default function VaultScreen({ onBack }) {
                 })}
               </div>
             </section>
-
-            {selectedKind && (
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider">
-                    {selectedLabel}
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => { setSelectedKind(null); setItemsByKind([]); }}
-                    className="text-brand-500 dark:text-brand-400 text-sm font-medium"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-                {loadingKind ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-8 h-8 text-brand-500 animate-spin" />
-                  </div>
-                ) : itemsByKind.length === 0 ? (
-                  <p className="text-zinc-500 dark:text-zinc-400 text-sm py-4">No hay ítems en esta carpeta.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {itemsByKind.map((item) => {
-                      const Icon = ICON_BY_KIND[item.kind] ?? ICON_BY_KIND[item.sourceKind] ?? FileText;
-                      const displayName = item.filename ?? item.title ?? item.url?.slice(0, 40) ?? (item.content?.slice(0, 50) || "Sin título");
-                      const statusLabel = item.kind === "favorite"
-                        ? (item.sourceKind ? KIND_LABEL[item.sourceKind] || item.sourceKind : "")
-                        : (item.inboxStatus === "processed" ? (item.processedPath || "Procesado") : "Pendiente");
-                      const typeLabel = item.type ? ` · ${item.type}` : "";
-                      return (
-                        <li key={`${item.kind}-${item.id}`}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedItem(item)}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-left hover:bg-zinc-100 transition-colors dark:bg-zinc-800/60 dark:border-zinc-700/50 dark:hover:bg-zinc-800/80"
-                          >
-                            <div className="w-9 h-9 rounded-lg bg-brand-500/10 dark:bg-zinc-700 flex items-center justify-center flex-shrink-0">
-                              <Icon className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-zinc-800 dark:text-zinc-200 text-sm font-medium truncate">
-                                {displayName}
-                              </p>
-                              <p className="text-zinc-500 dark:text-zinc-400 text-xs truncate">
-                                {statusLabel}{typeLabel} · {formatDate(item.createdAt)}
-                              </p>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-            )}
 
             <section>
               <h2 className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-3">
