@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import cors from "cors";
 import inboxRoutes from "./routes/inbox.js";
 import processRoutes from "./routes/process.js";
+import searchRoutes from "./routes/search.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, "..");
@@ -19,6 +20,7 @@ app.use("/api/uploads", express.static(path.join(rootDir, "uploads")));
 
 app.use("/api/inbox", inboxRoutes);
 app.use("/api/process", processRoutes);
+app.use("/api", searchRoutes);
 
 app.get("/api/health", (_, res) => {
   res.json({ ok: true });
