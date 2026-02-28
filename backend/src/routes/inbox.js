@@ -850,6 +850,43 @@ router.get("/", async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+// GET /api/inbox/export — Todos los ítems sin filtrar por estado (para exportar)
+// ──────────────────────────────────────────────
+
+router.get("/export", async (req, res) => {
+  try {
+    const parseAI = (raw) => {
+      if (!raw || typeof raw !== "string") return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    };
+    const withKind = (items, kind) =>
+      items.map((item) => ({ ...item, kind, aiEnrichment: parseAI(item.aiEnrichment) }));
+
+    const [links, files, photos, audios, notes, videos] = await Promise.all([
+      prisma.link.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.file.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.photo.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.audio.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.note.findMany({ orderBy: { createdAt: "desc" } }),
+      prisma.video.findMany({ orderBy: { createdAt: "desc" } }),
+    ]);
+
+    const unified = [
+      ...withKind(links, "link"),
+      ...withKind(files, "file"),
+      ...withKind(photos, "photo"),
+      ...withKind(audios, "audio"),
+      ...withKind(notes, "note"),
+      ...withKind(videos, "video"),
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json(unified);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
 // GET /api/inbox/:kind/:id — Detalle de un item (incluye aiEnrichment)
 // ──────────────────────────────────────────────
 

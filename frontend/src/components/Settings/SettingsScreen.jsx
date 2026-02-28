@@ -18,6 +18,7 @@ import {
 import { useAppLanguage } from "../../context/LanguageContext";
 import LanguageBottomSheet from "./LanguageBottomSheet";
 import { translations } from "../../i18n/translations";
+import { getAllItemsForExport } from "../../api/client";
 
 const ASSIST_LEVELS = ["Manual", "Equilibrado", "Automático"];
 
@@ -189,7 +190,6 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
   const [suggestionsOn, setSuggestionsOn] = useState(true);
 
-  const [exportSheetOpen, setExportSheetOpen] = useState(false);
   const [cloudSheetOpen, setCloudSheetOpen] = useState(false);
   const [assistLevelSheetOpen, setAssistLevelSheetOpen] = useState(false);
   const [assistLevel, setAssistLevel] = useState("Equilibrado");
@@ -198,9 +198,32 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
 
   const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
   const [editProfileSheetOpen, setEditProfileSheetOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const selectedLanguageLabel = translations[locale]?.languages?.[locale] ?? translations.es.languages.es;
+
+  async function handleExportJSON() {
+    setExportLoading(true);
+    try {
+      const items = await getAllItemsForExport();
+      const blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `digital-brain-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setToastMessage(`✅ Exportados ${items.length} ítem${items.length !== 1 ? "s" : ""} a JSON`);
+      setToastVisible(true);
+    } catch (err) {
+      setToastMessage(`❌ Error al exportar: ${err.message}`);
+      setToastVisible(true);
+    } finally {
+      setExportLoading(false);
+    }
+  }
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
@@ -243,8 +266,8 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
         </SettingsGroup>
 
         <SettingsGroup title={t("settings.dataPrivacy")}>
-          <button type="button" onClick={() => setExportSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={FileDown} label={t("settings.exportNotes")}>
+          <button type="button" onClick={handleExportJSON} disabled={exportLoading} className={ROW_BASE + " text-left disabled:opacity-50"}>
+            <SettingsRow icon={FileDown} label={exportLoading ? "Exportando…" : t("settings.exportNotes")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
@@ -281,7 +304,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
-          <button type="button" onClick={() => setToastVisible(true)} className={ROW_BASE + " text-left"}>
+          <button type="button" onClick={() => { setToastMessage("Abriendo el centro de soporte en el navegador..."); setToastVisible(true); }} className={ROW_BASE + " text-left"}>
             <SettingsRow icon={HelpCircle} label={t("settings.helpCenter")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
@@ -295,22 +318,6 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
       </main>
 
       <LanguageBottomSheet isOpen={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
-
-      {/* Bottom Sheet: Formato de exportación */}
-      <BottomSheet isOpen={exportSheetOpen} onClose={() => setExportSheetOpen(false)} title="Formato de exportación">
-        <div className="flex flex-col gap-2">
-          {["Texto Plano", "Markdown", "PDF"].map((format) => (
-            <button
-              key={format}
-              type="button"
-              onClick={() => setExportSheetOpen(false)}
-              className="w-full px-4 py-3 rounded-xl bg-neutral-700 hover:bg-neutral-600 text-white text-sm font-medium transition-colors text-left"
-            >
-              {format}
-            </button>
-          ))}
-        </div>
-      </BottomSheet>
 
       {/* Bottom Sheet: Conectar cuenta */}
       <BottomSheet isOpen={cloudSheetOpen} onClose={() => setCloudSheetOpen(false)} title="Conectar cuenta">
@@ -371,7 +378,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
       />
 
       <Toast
-        message="Abriendo el centro de soporte en el navegador..."
+        message={toastMessage}
         visible={toastVisible}
         onDismiss={() => setToastVisible(false)}
       />
