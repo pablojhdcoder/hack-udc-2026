@@ -653,7 +653,10 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                 Carpetas
               </h2>
               <div className="grid grid-cols-2 gap-2">
-                {folders.map((f) => {
+                {[...folders].sort((a, b) => {
+                  const priority = { novelty: 0, favorite: 1 };
+                  return (priority[a.kind] ?? 2) - (priority[b.kind] ?? 2);
+                }).map((f) => {
                   const Icon = ICON_BY_KIND[f.kind] ?? FileText;
                   const label = f.name || KIND_LABEL[f.kind] || f.kind;
                   return (
