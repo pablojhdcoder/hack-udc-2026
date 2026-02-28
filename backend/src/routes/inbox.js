@@ -468,6 +468,97 @@ router.get("/novelties", async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+// GET /api/inbox/wrapped/weekly — Ítems más abiertos en la última semana (tipo Wrapped)
+// ──────────────────────────────────────────────
+
+router.get("/wrapped/weekly", async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 15, 50);
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const views = await prisma.viewState.findMany({
+      where: { lastOpenedAt: { gte: since } },
+      orderBy: [{ openedCount: "desc" }, { lastOpenedAt: "desc" }],
+      take: limit * 3,
+    });
+
+    if (!views.length) return res.json([]);
+
+    const kinds = ["note", "link", "file", "photo", "audio", "video"];
+    const modelMap = {
+      link: prisma.link,
+      note: prisma.note,
+      file: prisma.file,
+      photo: prisma.photo,
+      audio: prisma.audio,
+      video: prisma.video,
+    };
+
+    const idsByKind = kinds.reduce((acc, k) => {
+      acc[k] = views.filter((v) => v.kind === k).map((v) => v.sourceId);
+      return acc;
+    }, {});
+
+    const entitiesByKind = {};
+    for (const k of kinds) {
+      const ids = idsByKind[k];
+      if (!ids || !ids.length) continue;
+      const rows = await modelMap[k].findMany({
+        where: { id: { in: ids } },
+      });
+      entitiesByKind[k] = rows.reduce((map, row) => {
+        map[row.id] = row;
+        return map;
+      }, {});
+    }
+
+    const unified = [];
+    for (const v of views) {
+      if (!modelMap[v.kind]) continue;
+      const entity = entitiesByKind[v.kind]?.[v.sourceId];
+      if (!entity) continue;
+      if (entity.inboxStatus !== "processed") continue;
+
+      const base = {
+        kind: v.kind,
+        id: v.sourceId,
+        title: toItemTitle(entity, v.kind),
+        inboxStatus: entity.inboxStatus,
+        processedPath: entity.processedPath,
+        createdAt: entity.createdAt,
+        openedCount: v.openedCount,
+        lastOpenedAt: v.lastOpenedAt,
+      };
+      if (v.kind === "link") {
+        unified.push({ ...base, url: entity.url, type: entity.type });
+      } else if (v.kind === "note") {
+        unified.push({ ...base, content: (entity.content || "").slice(0, 200), type: entity.type });
+      } else if (v.kind === "file" || v.kind === "photo") {
+        unified.push({
+          ...base,
+          filename: entity.filename,
+          type: entity.type,
+          filePath: entity.filePath,
+        });
+      } else if (v.kind === "audio" || v.kind === "video") {
+        unified.push({
+          ...base,
+          type: entity.type,
+          filePath: entity.filePath,
+        });
+      } else {
+        unified.push(base);
+      }
+      if (unified.length >= limit) break;
+    }
+
+    res.json(unified);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
 // GET /api/inbox/processed/recent — Últimos ítems procesados (mezcla por tipo para que aparezcan audios, etc.)
 // ──────────────────────────────────────────────
 

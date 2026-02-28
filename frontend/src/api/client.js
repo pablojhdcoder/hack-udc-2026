@@ -169,6 +169,16 @@ export async function getNovelties(limit = 50) {
 }
 
 /**
+ * Wrapped semanal: ítems más abiertos en la última semana.
+ * @param {number} limit
+ */
+export async function getWeeklyWrapped(limit = 15) {
+  const res = await fetch(`${API_BASE}/inbox/wrapped/weekly?limit=${limit}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
  * Marca un ítem como "abierto" (para que deje de aparecer en Novedades).
  * @param {string} kind - note | link | file | photo | audio | video
  * @param {string} id
