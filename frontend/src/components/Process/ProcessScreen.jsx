@@ -139,7 +139,7 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
           <div className="w-10" />
         </header>
         <main className="flex-1 flex items-center justify-center px-6">
-          <p className="text-zinc-600 dark:text-zinc-500 text-sm text-center">No hay notas en el inbox.</p>
+          <p className="text-zinc-600 dark:text-zinc-500 text-sm text-center">No hay ítems en la fábrica de las ideas.</p>
         </main>
       </div>
     );
@@ -156,7 +156,7 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
             type="button"
             onClick={onBack}
             className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            aria-label="Volver al inbox"
+            aria-label="Volver a la fábrica de las ideas"
           >
             <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>

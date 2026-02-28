@@ -187,7 +187,7 @@ export default function App() {
           )}
           {loading ? (
             <div className="flex items-center justify-center py-12 text-zinc-600 dark:text-zinc-500 text-sm">
-              Cargando inbox…
+              Cargando la fábrica de las ideas…
             </div>
           ) : (
             <InboxList items={filteredItems} searchQuery={searchQuery} />
