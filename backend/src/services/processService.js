@@ -14,7 +14,7 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.join(__dirname, "..", "..");
-const KINDS = ["link", "note", "file", "audio", "video"];
+const KINDS = ["link", "note", "file", "photo", "audio", "video"];
 
 /** Resuelve ruta absoluta del fichero (uploads/... o backend/uploads/...) */
 function resolveFilePath(relativePath) {
@@ -74,6 +74,12 @@ async function ensureEnrichment(kind, id, entity) {
         await prisma.file.update({ where: { id }, data: enrichmentPayload(enrichment) });
         break;
       }
+      case "photo": {
+        const absolutePath = resolveFilePath(entity.filePath);
+        enrichment = await enrichFile(absolutePath, entity.type, entity.filename);
+        await prisma.photo.update({ where: { id }, data: enrichmentPayload(enrichment) });
+        break;
+      }
       case "audio": {
         const absolutePath = resolveFilePath(entity.filePath);
         enrichment = await enrichAudio(absolutePath, entity.type);
@@ -105,6 +111,9 @@ async function ensureEnrichment(kind, id, entity) {
         break;
       case "file":
         await prisma.file.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
+        break;
+      case "photo":
+        await prisma.photo.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
         break;
       case "audio":
         await prisma.audio.update({ where: { id }, data: { aiEnrichment: JSON.stringify(fallback) } });
@@ -170,6 +179,20 @@ export async function getEntityByKindId(kind, id) {
         size: file.size,
         aiEnrichment: parseAI(file.aiEnrichment),
         createdAt: file.createdAt,
+      };
+    }
+    case "photo": {
+      const photo = await prisma.photo.findUnique({ where: { id } });
+      if (!photo) return null;
+      return {
+        kind: "photo",
+        title: photo.filename ?? "Foto",
+        type: photo.type,
+        filename: photo.filename,
+        filePath: photo.filePath,
+        size: photo.size,
+        aiEnrichment: parseAI(photo.aiEnrichment),
+        createdAt: photo.createdAt,
       };
     }
     case "audio": {
@@ -259,6 +282,9 @@ export async function processItem(item, destination) {
       break;
     case "file":
       await prisma.file.update({ where: { id }, data: updatePayload });
+      break;
+    case "photo":
+      await prisma.photo.update({ where: { id }, data: updatePayload });
       break;
     case "audio":
       await prisma.audio.update({ where: { id }, data: updatePayload });

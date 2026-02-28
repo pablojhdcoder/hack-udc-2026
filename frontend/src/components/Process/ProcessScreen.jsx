@@ -6,6 +6,8 @@ import {
   Mic,
   FileText,
   File,
+  Image,
+  Video,
   Trash2,
   Pencil,
   Check,
@@ -20,6 +22,8 @@ const ICON_BY_KIND = {
   note: FileText,
   audio: Mic,
   file: File,
+  photo: Image,
+  video: Video,
 };
 
 const MOCK_FOLDERS = [

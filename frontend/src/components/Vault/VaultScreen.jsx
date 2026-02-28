@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, FileText, Link2, File, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink } from "lucide-react";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink } from "lucide-react";
 import {
   getVaultFolders,
   getProcessedRecent,
@@ -15,6 +15,7 @@ const ICON_BY_KIND = {
   note: FileText,
   link: Link2,
   file: File,
+  photo: Image,
   audio: Mic,
   video: Video,
   favorite: Star,
@@ -24,6 +25,7 @@ const KIND_LABEL = {
   note: "Notas",
   link: "Enlaces",
   file: "Archivos",
+  photo: "Fotos",
   audio: "Audio",
   video: "Video",
   favorite: "Favoritos",
@@ -63,7 +65,7 @@ export default function VaultScreen({ onBack }) {
     try {
       const [foldersRes, recentRes] = await Promise.all([
         getVaultFolders(),
-        getProcessedRecent(15),
+        getProcessedRecent(5),
       ]);
       setFolders(Array.isArray(foldersRes.folders) ? foldersRes.folders : []);
       setRecent(Array.isArray(recentRes) ? recentRes : []);

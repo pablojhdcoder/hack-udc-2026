@@ -60,6 +60,17 @@ async function runFileEnrichment(id, filePath, type, filename) {
   }
 }
 
+async function runPhotoEnrichment(id, filePath, type, filename) {
+  try {
+    const enrichment = await enrichFile(filePath, type, filename);
+    await saveEnrichment(prisma.photo, id, enrichment);
+    console.log("[AI] Foto", id, "enriquecida correctamente.");
+  } catch (err) {
+    console.error(`[AI] Error enriqueciendo foto ${id}:`, err.message);
+    await saveEnrichment(prisma.photo, id, { error: err.message, enrichedAt: new Date().toISOString() });
+  }
+}
+
 async function runVideoEnrichment(id, filename, type) {
   try {
     const enrichment = await enrichVideo(filename, type);
@@ -141,6 +152,35 @@ router.post("/", optionalMulter, async (req, res) => {
           type: video.type,
           filePath: video.filePath,
           createdAt: video.createdAt,
+          inboxStatus: "pending",
+          aiEnrichmentPending: aiActive,
+        });
+      }
+
+      if (kind === "photo") {
+        const photo = await prisma.photo.create({
+          data: {
+            filePath: relativePath,
+            type: type || "image",
+            filename: req.file.originalname,
+            size: req.file.size ?? null,
+            inboxStatus: "pending",
+          },
+        });
+
+        if (aiActive) {
+          console.log("[AI] Enriqueciendo foto", photo.id);
+          runPhotoEnrichment(photo.id, req.file.path, photo.type, photo.filename).catch((e) => console.error("[AI] Photo enrichment catch:", e.message));
+        }
+
+        return res.status(201).json({
+          kind: "photo",
+          id: photo.id,
+          type: photo.type,
+          filename: photo.filename,
+          filePath: photo.filePath,
+          fileType: photo.type,
+          createdAt: photo.createdAt,
           inboxStatus: "pending",
           aiEnrichmentPending: aiActive,
         });
@@ -269,10 +309,11 @@ router.post("/", optionalMulter, async (req, res) => {
 
 router.get("/folders", async (req, res) => {
   try {
-    const [notesCount, linksCount, filesCount, audiosCount, videosCount, favoritesCount] = await Promise.all([
+    const [notesCount, linksCount, filesCount, photosCount, audiosCount, videosCount, favoritesCount] = await Promise.all([
       prisma.note.count(),
       prisma.link.count(),
       prisma.file.count(),
+      prisma.photo.count(),
       prisma.audio.count(),
       prisma.video.count(),
       prisma.favorite.count(),
@@ -281,6 +322,7 @@ router.get("/folders", async (req, res) => {
       { kind: "note", name: "Notas", count: notesCount },
       { kind: "link", name: "Enlaces", count: linksCount },
       { kind: "file", name: "Archivos", count: filesCount },
+      { kind: "photo", name: "Fotos", count: photosCount },
       { kind: "audio", name: "Audio", count: audiosCount },
       { kind: "video", name: "Video", count: videosCount },
       { kind: "favorite", name: "Favoritos", count: favoritesCount },
@@ -308,6 +350,7 @@ function toItemTitle(item, kind) {
   if (kind === "note") return (item.content || "").slice(0, 50) || "Nota";
   if (kind === "link") return item.title || item.url?.slice(0, 40) || "Enlace";
   if (kind === "file") return item.filename || "Archivo";
+  if (kind === "photo") return item.filename || (parseAI(item.aiEnrichment)?.title) || "Foto";
   if (kind === "audio") return (parseAI(item.aiEnrichment)?.title) || "Nota de voz";
   if (kind === "video") return item.title || (parseAI(item.aiEnrichment)?.title) || "Vídeo";
   return "Ítem";
@@ -316,10 +359,11 @@ function toItemTitle(item, kind) {
 router.get("/processed/recent", async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 20, 50);
-    const perKind = Math.max(1, Math.ceil(limit / 5));
-    const [links, files, audios, notes, videos] = await Promise.all([
+    const perKind = Math.max(1, Math.ceil(limit / 6));
+    const [links, files, photos, audios, notes, videos] = await Promise.all([
       prisma.link.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
       prisma.file.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
+      prisma.photo.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
       prisma.audio.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
       prisma.note.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
       prisma.video.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: perKind }),
@@ -328,6 +372,7 @@ router.get("/processed/recent", async (req, res) => {
       ...notes.map((item) => ({ kind: "note", id: item.id, title: toItemTitle(item, "note"), processedPath: item.processedPath, createdAt: item.createdAt })),
       ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), url: item.url, processedPath: item.processedPath, createdAt: item.createdAt })),
       ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
       ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
       ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
     ]
@@ -345,7 +390,7 @@ router.get("/processed/recent", async (req, res) => {
 
 router.get("/by-kind/:kind", async (req, res) => {
   const { kind } = req.params;
-  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, photo: prisma.photo, audio: prisma.audio, video: prisma.video };
   const model = modelMap[kind];
   if (!model) return res.status(400).json({ error: "kind inválido" });
 
@@ -361,6 +406,7 @@ router.get("/by-kind/:kind", async (req, res) => {
         createdAt: item.createdAt,
       };
       if (kind === "file") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
+      if (kind === "photo") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
       if (kind === "link") return { ...base, url: item.url, type: item.type };
       if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
       if (kind === "audio") return { ...base, type: item.type, filePath: item.filePath };
@@ -385,7 +431,7 @@ function copyToFavorite(item, kind) {
     title: title || null,
     content: kind === "note" ? item.content : null,
     url: kind === "link" ? item.url : null,
-    filename: kind === "file" ? item.filename : null,
+    filename: (kind === "file" || kind === "photo") ? item.filename : null,
     filePath: item.filePath ?? null,
     type: item.type ?? null,
     size: item.size ?? null,
@@ -438,7 +484,7 @@ router.get("/favorites/check", async (req, res) => {
 
 router.post("/favorites", async (req, res) => {
   const { kind, id: sourceId } = req.body;
-  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, photo: prisma.photo, audio: prisma.audio, video: prisma.video };
   const model = modelMap[kind];
   if (!model || !sourceId) return res.status(400).json({ error: "Se requiere kind e id del ítem" });
 
@@ -483,9 +529,10 @@ router.delete("/favorites/:id", async (req, res) => {
 
 router.get("/", async (req, res) => {
   try {
-    const [links, files, audios, notes, videos] = await Promise.all([
+    const [links, files, photos, audios, notes, videos] = await Promise.all([
       prisma.link.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
       prisma.file.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
+      prisma.photo.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
       prisma.audio.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
       prisma.note.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
       prisma.video.findMany({ where: { inboxStatus: "pending" }, orderBy: { createdAt: "desc" } }),
@@ -504,6 +551,7 @@ router.get("/", async (req, res) => {
     const unified = [
       ...withKind(links, "link"),
       ...withKind(files, "file"),
+      ...withKind(photos, "photo"),
       ...withKind(audios, "audio"),
       ...withKind(notes, "note"),
       ...withKind(videos, "video"),
@@ -525,6 +573,8 @@ router.get("/", async (req, res) => {
         }
         if (item.kind === "note") return { ...base, content: item.content };
         if (item.kind === "file")
+          return { ...base, filename: item.filename, filePath: item.filePath, fileType: item.type };
+        if (item.kind === "photo")
           return { ...base, filename: item.filename, filePath: item.filePath, fileType: item.type };
         if (item.kind === "audio")
           return { ...base, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
@@ -551,7 +601,7 @@ router.get("/", async (req, res) => {
 
 router.get("/:kind/:id", async (req, res) => {
   const { kind, id } = req.params;
-  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, photo: prisma.photo, audio: prisma.audio, video: prisma.video };
   const model = modelMap[kind];
   if (!model) return res.status(400).json({ error: "kind inválido" });
 
@@ -583,7 +633,7 @@ router.get("/:kind/:id", async (req, res) => {
 
 router.delete("/:kind/:id", async (req, res) => {
   const { kind, id } = req.params;
-  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, audio: prisma.audio, video: prisma.video };
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, photo: prisma.photo, audio: prisma.audio, video: prisma.video };
   const model = modelMap[kind];
   if (!model) return res.status(400).json({ error: "kind inválido" });
 

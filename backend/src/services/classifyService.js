@@ -79,5 +79,9 @@ export function classifyFile(filename) {
     return { kind: "video", type: type ?? "video" };
   }
 
+  if (["image", "png", "jpg", "jpeg", "gif", "webp"].includes(ext) || type === "image") {
+    return { kind: "photo", type: type ?? (ext || "image") };
+  }
+
   return { kind: "file", type: type ?? "unknown" };
 }

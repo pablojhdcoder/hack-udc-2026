@@ -117,6 +117,14 @@ export function buildMarkdownContent(item) {
     bodyParts.push("");
   }
 
+  // Foto
+  if (item.kind === "photo" && item.filePath) {
+    bodyParts.push("## Foto", "", `- **Ruta:** \`${item.filePath}\``);
+    if (item.filename) bodyParts.push(`- **Nombre:** ${item.filename}`);
+    if (item.size) bodyParts.push(`- **Tamaño:** ${(item.size / 1024).toFixed(1)} KB`);
+    bodyParts.push("");
+  }
+
   // Vídeo
   if (item.kind === "video" && item.filePath) {
     bodyParts.push("## Vídeo", "", `- **Ruta:** \`${item.filePath}\``);
