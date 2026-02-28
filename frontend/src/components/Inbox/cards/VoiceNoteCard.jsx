@@ -18,7 +18,7 @@ function formatDuration(sec) {
 
 export default function VoiceNoteCard({ item }) {
   return (
-    <article className="rounded-xl bg-zinc-800/80 border border-zinc-700/50 p-4">
+    <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-zinc-800/80 dark:border-zinc-700/50">
       <div className="flex gap-3 items-center">
         <button
           type="button"
@@ -29,15 +29,15 @@ export default function VoiceNoteCard({ item }) {
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <Mic className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-            <span className="text-zinc-400 text-xs">Nota de voz</span>
+            <Mic className="w-4 h-4 text-brand-500 dark:text-zinc-400 flex-shrink-0" />
+            <span className="text-zinc-600 dark:text-zinc-400 text-xs">Nota de voz</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex gap-0.5 items-end h-5">
               {[0.4, 0.7, 1, 0.6, 0.9, 0.5, 0.8, 0.6, 0.9, 0.5].map((h, i) => (
                 <div
                   key={i}
-                  className="w-1 rounded-full bg-zinc-500"
+                  className="w-1 rounded-full bg-zinc-400 dark:bg-zinc-500"
                   style={{ height: `${h * 100}%` }}
                 />
               ))}

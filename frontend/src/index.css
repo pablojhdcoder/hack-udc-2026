@@ -12,6 +12,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Tema claro: fondo blanco/azulado cuando no hay .dark en html */
+html:not(.dark) body,
+html:not(.dark) #root {
+  background: #f8fafc;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -50,4 +56,13 @@ body {
 
 .animate-slide-in-left {
   animation: slideInLeft 0.2s ease-out;
+}
+
+/* Ocultar barra de scroll manteniendo scroll (estilo app nativa) */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
