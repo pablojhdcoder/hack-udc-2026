@@ -326,10 +326,10 @@ router.get("/processed/recent", async (req, res) => {
     ]);
     const unified = [
       ...notes.map((item) => ({ kind: "note", id: item.id, title: toItemTitle(item, "note"), processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), processedPath: item.processedPath, createdAt: item.createdAt })),
-      ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), url: item.url, processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
+      ...videos.map((item) => ({ kind: "video", id: item.id, title: toItemTitle(item, "video"), filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt })),
     ]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, limit);
@@ -360,11 +360,11 @@ router.get("/by-kind/:kind", async (req, res) => {
         processedPath: item.processedPath,
         createdAt: item.createdAt,
       };
-      if (kind === "file") return { ...base, filename: item.filename, type: item.type };
+      if (kind === "file") return { ...base, filename: item.filename, type: item.type, filePath: item.filePath };
       if (kind === "link") return { ...base, url: item.url, type: item.type };
       if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), type: item.type };
-      if (kind === "audio") return { ...base, type: item.type };
-      if (kind === "video") return { ...base, type: item.type };
+      if (kind === "audio") return { ...base, type: item.type, filePath: item.filePath };
+      if (kind === "video") return { ...base, type: item.type, filePath: item.filePath };
       return base;
     });
     res.json(list);
@@ -410,6 +410,7 @@ router.get("/favorites", async (req, res) => {
         sourceId: f.sourceId,
         title: f.title ?? f.filename ?? f.url?.slice(0, 40) ?? "Favorito",
         filename: f.filename,
+        filePath: f.filePath,
         url: f.url,
         content: f.content,
         type: f.type,

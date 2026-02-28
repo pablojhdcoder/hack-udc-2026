@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, FileText, Link2, File, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star } from "lucide-react";
+import { ArrowLeft, FileText, Link2, File, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink } from "lucide-react";
 import {
   getVaultFolders,
   getProcessedRecent,
@@ -204,6 +204,18 @@ export default function VaultScreen({ onBack }) {
   }, [selectedItem, togglingFavorite, load, selectedKind]);
 
   const selectedLabel = selectedKind ? (KIND_LABEL[selectedKind] || selectedKind) : null;
+
+  const openItemUrl = useCallback(() => {
+    if (!selectedItem) return;
+    if (selectedItem.url) {
+      window.open(selectedItem.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (selectedItem.filePath) {
+      const basename = selectedItem.filePath.split("/").pop() || selectedItem.filePath;
+      window.open(`/api/uploads/${basename}`, "_blank", "noopener,noreferrer");
+    }
+  }, [selectedItem]);
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
@@ -439,6 +451,16 @@ export default function VaultScreen({ onBack }) {
                   {selectedItem.filename ?? selectedItem.title ?? selectedItem.url?.slice(0, 40) ?? "Ítem"}
                 </p>
                 <div className="flex flex-wrap gap-3">
+                  {(selectedItem.url || selectedItem.filePath) && (
+                    <button
+                      type="button"
+                      onClick={openItemUrl}
+                      className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-brand-500/50 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-sm font-medium flex items-center justify-center gap-2"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      {selectedItem.url ? "Abrir enlace" : "Ver archivo"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setSelectedItem(null)}
