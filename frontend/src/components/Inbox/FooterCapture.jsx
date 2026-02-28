@@ -244,7 +244,7 @@ export default function FooterCapture({
   };
 
   return (
-    <footer className="shrink-0 bg-white border-t border-zinc-200 safe-bottom dark:bg-zinc-900 dark:border-zinc-800">
+    <footer className="shrink-0 bg-white border-t border-zinc-200 safe-bottom dark:bg-neutral-900 dark:border-neutral-800">
       <input
         ref={fileInputRef}
         type="file"
@@ -321,7 +321,7 @@ export default function FooterCapture({
           <button
             type="button"
             onClick={handleAttachClick}
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
+            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-zinc-400 transition-colors"
             aria-label="Adjuntar archivo"
             aria-expanded={attachMenuOpen}
           >
@@ -330,7 +330,7 @@ export default function FooterCapture({
           <button
             type="button"
             onClick={handleOpenCamera}
-            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 transition-colors"
+            className="flex-shrink-0 p-2.5 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-zinc-400 transition-colors"
             aria-label="Tomar foto"
           >
             <Camera className="w-5 h-5" />
@@ -342,7 +342,7 @@ export default function FooterCapture({
             className={`flex-shrink-0 p-2.5 rounded-full transition-colors ${
               recording
                 ? "bg-red-500 text-white hover:bg-red-600"
-                : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+                : "hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-zinc-400"
             } disabled:opacity-50`}
             aria-label={recording ? "Detener grabación" : "Grabar audio"}
           >
@@ -360,7 +360,7 @@ export default function FooterCapture({
                 onClick={() => setAttachMenuOpen(false)}
                 aria-hidden
               />
-              <div className="absolute bottom-full left-0 mb-2 z-20 min-w-[180px] py-1 rounded-xl bg-white border border-zinc-200 shadow-xl dark:bg-zinc-800 dark:border-zinc-700">
+              <div className="absolute bottom-full left-0 mb-2 z-20 min-w-[180px] py-1 rounded-xl bg-white border border-zinc-200 shadow-xl dark:bg-neutral-800 dark:border-neutral-700">
                 <button
                   type="button"
                   onClick={handleSubirArchivo}
@@ -374,7 +374,7 @@ export default function FooterCapture({
           )}
         </div>
 
-        <div className="flex-1 flex items-center rounded-3xl bg-zinc-100 border border-zinc-200 pl-4 pr-2 py-2 min-h-[44px] dark:bg-zinc-800 dark:border-zinc-700/50">
+        <div className="flex-1 flex items-center rounded-3xl bg-zinc-100 border border-zinc-200 pl-4 pr-2 py-2 min-h-[44px] dark:bg-neutral-800 dark:border-neutral-700/50">
           <input
             type="text"
             placeholder="Escribe o pega un enlace..."

@@ -1,15 +1,14 @@
 /**
- * Contenedor mobile-first: en desktop centra con ancho de móvil y alto fijo tipo app.
- * h-screen en móvil; en viewport grande opcionalmente h-[850px] para simular dispositivo.
+ * Contenedor raíz: en móvil ocupa todo el viewport (w-full, h-[100dvh]);
+ * en desktop se centra con ancho máximo de teléfono (max-w-md mx-auto).
+ * Sin padding/margin en este contenedor para evitar márgenes laterales.
  */
 export default function MobileFrame({ children, className = "" }) {
   return (
-    <div className="min-h-screen bg-zinc-100 text-zinc-900 flex justify-center items-center dark:bg-zinc-950 dark:text-zinc-100">
-      <div
-        className={`w-full max-w-[430px] h-screen max-h-[850px] shadow-2xl relative flex flex-col overflow-hidden bg-white dark:bg-zinc-900 ${className}`}
-      >
-        {children}
-      </div>
+    <div
+      className={`w-full h-[100dvh] max-w-md mx-auto bg-[#0a0a0a] overflow-hidden flex flex-col relative ${className}`}
+    >
+      {children}
     </div>
   );
 }

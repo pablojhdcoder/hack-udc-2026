@@ -21,14 +21,14 @@ function Thumbnail({ type, thumbnailUrl, alt }) {
 
   if (!thumbnailUrl || error) {
     return (
-      <div className="w-12 h-12 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center flex-shrink-0">
+      <div className="w-12 h-12 rounded-lg bg-neutral-800 border border-neutral-700 flex items-center justify-center flex-shrink-0">
         <Icon className="w-5 h-5 text-zinc-300" />
       </div>
     );
   }
 
   return (
-    <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-900 border border-zinc-700 flex-shrink-0">
+    <div className="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 border border-neutral-700 flex-shrink-0">
       <img
         src={thumbnailUrl}
         alt={alt || ""}
@@ -112,15 +112,15 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
   const hasResults = items.length > 0;
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-zinc-950 text-zinc-50">
+    <div className="h-full min-h-0 flex flex-col bg-neutral-950 text-zinc-50">
       {/* Header con título / buscador */}
-      <header className="shrink-0 flex items-center h-14 px-4 border-b border-zinc-800 bg-zinc-950">
+      <header className="shrink-0 flex items-center h-14 px-4 border-b border-neutral-800 bg-neutral-950">
         {isSearchOpen ? (
           <div className="flex items-center gap-2 w-full">
             <button
               type="button"
               onClick={handleCloseSearch}
-              className="p-2 -ml-2 rounded-full hover:bg-zinc-800 text-zinc-400 shrink-0"
+              className="p-2 -ml-2 rounded-full hover:bg-neutral-800 text-zinc-400 shrink-0"
               aria-label="Cerrar búsqueda"
             >
               <X className="w-5 h-5" />
@@ -142,7 +142,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
             <button
               type="button"
               onClick={handleOpenSearch}
-              className="p-2 -mr-2 rounded-full hover:bg-zinc-800 text-zinc-400"
+              className="p-2 -mr-2 rounded-full hover:bg-neutral-800 text-zinc-400"
               aria-label="Buscar"
             >
               <Search className="w-5 h-5" />
@@ -176,7 +176,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
               <li key={item.id}>
                 <button
                   type="button"
-                  className="w-full flex items-center gap-3 p-3 rounded-2xl bg-zinc-900/80 border border-zinc-800 text-left hover:bg-zinc-900 transition-colors"
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl bg-neutral-900/80 border border-neutral-800 text-left hover:bg-neutral-900 transition-colors"
                 >
                   <Thumbnail
                     type={item.type}
@@ -195,7 +195,7 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
                         {item.tags.map((tag) => (
                           <span
                             key={tag}
-                            className="text-[10px] bg-gray-800 border border-gray-700 text-gray-300 px-2 py-0.5 rounded-full"
+                            className="text-[10px] bg-neutral-800 border border-neutral-700 text-neutral-300 px-2 py-0.5 rounded-full"
                           >
                             {tag}
                           </span>

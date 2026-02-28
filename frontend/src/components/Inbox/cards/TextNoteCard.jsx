@@ -12,9 +12,9 @@ function formatDate(iso) {
 
 export default function TextNoteCard({ item }) {
   return (
-    <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-zinc-800/80 dark:border-zinc-700/50">
+    <article className="rounded-xl bg-zinc-50 border border-zinc-200 p-4 dark:bg-neutral-800/80 dark:border-neutral-700/50">
       <div className="flex gap-3">
-        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-brand-500/10 flex items-center justify-center dark:bg-zinc-700/80">
+        <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-brand-500/10 flex items-center justify-center dark:bg-neutral-700/80">
           <FileText className="w-4 h-4 text-brand-500 dark:text-zinc-400" />
         </div>
         <div className="flex-1 min-w-0">

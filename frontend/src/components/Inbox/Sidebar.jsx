@@ -17,7 +17,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
       />
       {/* Panel off-canvas: absolute dentro del marco, flota sobre el contenido */}
       <aside
-        className={`absolute top-0 left-0 h-full w-64 bg-white border-r border-zinc-200 z-50 flex flex-col transition-transform duration-300 ease-out dark:bg-zinc-900 dark:border-zinc-800 ${
+        className={`absolute top-0 left-0 h-full w-64 bg-white border-r border-zinc-200 z-50 flex flex-col transition-transform duration-300 ease-out dark:bg-neutral-900 dark:border-neutral-800 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-modal="true"
@@ -29,7 +29,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800"
             aria-label="Cerrar"
           >
             <X className="w-5 h-5 text-zinc-600 dark:text-zinc-300" />
@@ -39,7 +39,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
           <button
             type="button"
             onClick={() => onNavigate?.("inbox")}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
           >
             <Inbox className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             La fábrica de las ideas
@@ -47,7 +47,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
           <button
             type="button"
             onClick={() => onNavigate?.("procesado")}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
           >
             <FolderOpen className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             Procesado
@@ -55,7 +55,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
           <button
             type="button"
             onClick={() => onNavigate?.("ajustes")}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200 mt-4"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200 mt-4"
           >
             <Settings className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             Ajustes
