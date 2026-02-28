@@ -11,8 +11,6 @@
  *   (AZURE_OPENAI_API_VERSION solo para recurso clásico; opcional AZURE_OPENAI_USE_V1=true para forzar v1)
  */
 
-import OpenAI from "openai";
-import { AzureOpenAI } from "openai/azure";
 import { createReadStream, existsSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -21,67 +19,55 @@ import { extractFileContent } from "./fileExtractService.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT?.replace(/\/$/, "") ?? "";
-const USE_V1 =
-  process.env.AZURE_OPENAI_USE_V1 === "true" ||
-  ENDPOINT.includes("services.ai.azure.com") ||
-  ENDPOINT.includes("/api/projects");
+const DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
+const WHISPER_DEPLOYMENT = process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT ?? "whisper";
+const API_KEY = process.env.AZURE_OPENAI_API_KEY ?? "";
+const API_VERSION = process.env.AZURE_OPENAI_API_VERSION ?? "2024-02-15-preview";
 
-// ──────────────────────────────────────────────
-// Cliente Azure OpenAI (lazy init)
-// ──────────────────────────────────────────────
-
-let _client = null;
-
-function getClient() {
-  if (!_client) {
-    if (USE_V1) {
-      // API v1: sin api-version (requerido para Azure AI Foundry/Studio)
-      _client = new OpenAI({
-        baseURL: `${ENDPOINT}/openai/v1`,
-        apiKey: process.env.AZURE_OPENAI_API_KEY,
-      });
-    } else {
-      const apiVersion =
-        process.env.AZURE_OPENAI_API_VERSION || "2024-02-15-preview";
-      _client = new AzureOpenAI({
-        endpoint: ENDPOINT,
-        apiKey: process.env.AZURE_OPENAI_API_KEY,
-        apiVersion,
-        deployment: process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o",
-      });
-    }
-  }
-  return _client;
-}
-
-function getDeploymentName() {
-  return process.env.AZURE_OPENAI_DEPLOYMENT ?? "gpt-4o";
+// Classic Azure OpenAI (.openai.azure.com) requires ?api-version=...
+// AI Foundry (/api/projects/...) does NOT. Detect automatically.
+const IS_FOUNDRY = ENDPOINT.includes("/api/projects/");
+function apiUrl(path) {
+  const base = `${ENDPOINT}${path}`;
+  return IS_FOUNDRY ? base : `${base}?api-version=${API_VERSION}`;
 }
 
 export function isAIEnabled() {
-  return !!(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY);
+  return !!(ENDPOINT && API_KEY);
 }
 
 // ──────────────────────────────────────────────
-// Helper: llamada al modelo de chat con JSON forzado
+// Llamada directa a Azure AI Foundry via fetch
+// (evitamos la SDK de OpenAI que añade api-version automáticamente)
 // ──────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Eres un asistente experto en análisis y clasificación de contenido digital para un "Second Brain" personal.
-Tu tarea es extraer metadatos ricos y estructurados del contenido que se te proporciona.
-Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.
-Sé conciso pero completo. Los tags deben estar en minúsculas y sin espacios (usa guiones si hace falta).`;
+async function azureChat(messages, maxTokens = 800) {
+  const url = apiUrl(`/openai/deployments/${DEPLOYMENT}/chat/completions`);
+  console.log(`[azureChat] POST ${url}`);
 
-async function callChat(messages, maxTokens = 800) {
-  const client = getClient();
-  const response = await client.chat.completions.create({
-    model: getDeploymentName(),
-    messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-    response_format: { type: "json_object" },
-    temperature: 0.1,
-    max_tokens: maxTokens,
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": API_KEY,
+    },
+    body: JSON.stringify({
+      messages,
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+      max_tokens: maxTokens,
+    }),
   });
-  const raw = response.choices[0]?.message?.content;
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Azure OpenAI error ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const raw = data.choices?.[0]?.message?.content;
   if (!raw) throw new Error("Respuesta vacía del modelo");
+
   try {
     return JSON.parse(raw);
   } catch (err) {
@@ -92,20 +78,25 @@ async function callChat(messages, maxTokens = 800) {
 // ──────────────────────────────────────────────
 // Esquema de enriquecimiento estándar esperado:
 // {
-//   title: string,
-//   summary: string,       (2-3 frases)
-//   tags: string[],        (palabras clave)
-//   topics: string[],      (temas principales)
-//   language: string,      ("es" | "en" | ...)
-//   keyPoints: string[],   (puntos más importantes)
-//   sentiment?: string,    ("positivo" | "negativo" | "neutro")
-//   category?: string,     (categoría broad: "tecnología", "educación", etc.)
-//   enrichedAt: string,    (ISO timestamp)
+//   title, summary, tags, topics, language, keyPoints,
+//   sentiment?, category?, enrichedAt
 // }
 // ──────────────────────────────────────────────
 
+const SYSTEM_PROMPT = `Eres un asistente experto en análisis y clasificación de contenido digital para un "Second Brain" personal.
+Tu tarea es extraer metadatos ricos y estructurados del contenido que se te proporciona.
+Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.
+Sé conciso pero completo. Los tags deben estar en minúsculas y sin espacios (usa guiones si hace falta).`;
+
 function withTimestamp(data) {
   return { ...data, enrichedAt: new Date().toISOString() };
+}
+
+function callChat(messages, maxTokens = 800) {
+  return azureChat(
+    [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    maxTokens
+  );
 }
 
 // ──────────────────────────────────────────────
@@ -216,47 +207,62 @@ Devuelve un JSON con la siguiente estructura exacta:
 }
 
 async function enrichImageWithVision(base64, mimeType, filename) {
-  const client = getClient();
-  const response = await client.chat.completions.create({
-    model: getDeploymentName(),
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: `Analiza esta imagen (nombre de fichero: "${filename}") y extrae metadatos estructurados.
+  const url = apiUrl(`/openai/deployments/${DEPLOYMENT}/chat/completions`);
+  console.log(`[enrichImageWithVision] POST ${url}`);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": API_KEY,
+    },
+    body: JSON.stringify({
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Analiza esta imagen (nombre de fichero: "${filename}") y extrae metadatos estructurados.
 
 Devuelve un JSON con la siguiente estructura exacta:
 {
   "title": "título descriptivo de la imagen",
   "summary": "descripción detallada en 2-3 frases",
-  "tags": ["tag1", "tag2", ...],
+  "tags": ["tag1", "tag2"],
   "topics": ["tema1", "tema2"],
   "language": "es|en|...",
   "keyPoints": ["elemento destacado 1", "elemento destacado 2"],
-  "category": "categoría (screenshot, fotografía, diagrama, infografía, etc.)",
+  "category": "screenshot|fotografía|diagrama|infografía|otro",
   "containsText": true,
   "dominantColors": ["color1", "color2"]
 }`,
-          },
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${base64}`, detail: "high" },
-          },
-        ],
-      },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.1,
-    max_tokens: 800,
+            },
+            {
+              type: "image_url",
+              image_url: { url: `data:${mimeType};base64,${base64}`, detail: "high" },
+            },
+          ],
+        },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+      max_tokens: 800,
+    }),
   });
-  const raw = response.choices[0]?.message?.content;
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Azure OpenAI vision error ${res.status}: ${errText}`);
+  }
+
+  const data = await res.json();
+  const raw = data.choices?.[0]?.message?.content;
   if (!raw) throw new Error("Respuesta vacía del modelo (visión)");
+
   try {
-    const result = JSON.parse(raw);
-    return withTimestamp(result);
+    return withTimestamp(JSON.parse(raw));
   } catch (err) {
     throw new Error(`JSON inválido en respuesta IA (visión): ${err.message}`);
   }
@@ -324,16 +330,27 @@ export async function enrichAudio(filePath, type) {
   let transcription = null;
 
   try {
-    const client = getClient();
-    const transcriptionResp = await client.audio.transcriptions.create({
-      model: process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT ?? "whisper",
-      file: createReadStream(absolutePath),
-      response_format: "verbose_json",
+    const whisperUrl = apiUrl(`/openai/deployments/${WHISPER_DEPLOYMENT}/audio/transcriptions`);
+    console.log(`[enrichAudio] POST ${whisperUrl}`);
+
+    const formData = new FormData();
+    const fileBlob = new Blob([await import("fs").then(m => m.promises.readFile(absolutePath))]);
+    formData.append("file", fileBlob, absolutePath.split("/").pop());
+    formData.append("response_format", "verbose_json");
+
+    const whisperRes = await fetch(whisperUrl, {
+      method: "POST",
+      headers: { "api-key": API_KEY },
+      body: formData,
     });
-    transcription =
-      typeof transcriptionResp === "string"
-        ? transcriptionResp
-        : transcriptionResp?.text ?? null;
+
+    if (!whisperRes.ok) {
+      const errText = await whisperRes.text();
+      throw new Error(`Whisper error ${whisperRes.status}: ${errText}`);
+    }
+
+    const whisperData = await whisperRes.json();
+    transcription = typeof whisperData === "string" ? whisperData : (whisperData?.text ?? null);
   } catch (err) {
     console.warn("[aiService] Whisper transcription failed:", err.message);
     return withTimestamp({ transcription: null, error: `Transcripción fallida: ${err.message}` });
