@@ -12,7 +12,7 @@ export async function getLinkPreview(url, options = {}) {
   try {
     const res = await fetch(url, {
       signal: signal ?? AbortSignal.timeout(5000),
-      headers: { "User-Agent": "DigitalBrain-Bot/1.0 (Kelea HackUDC 2026)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; +https://example.com/bot)" },
       redirect: "follow",
     });
 
