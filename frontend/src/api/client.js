@@ -1,32 +1,16 @@
+import { MOCK_INBOX_ITEMS } from "../data/mockInbox";
+
 const API_BASE = "/api";
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
-// ——— Mock: datos en memoria (solo se usa cuando VITE_USE_MOCK=true)
-const mockItems = [
-  {
-    kind: "link",
-    id: "mock-link-1",
-    type: "youtube",
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    title: "Vídeo de ejemplo",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    kind: "note",
-    id: "mock-note-1",
-    type: "note",
-    content: "Apunte rápido: round-robin con quantum grande se comporta como FIFO.",
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    kind: "link",
-    id: "mock-link-2",
-    type: "github",
-    url: "https://github.com/prisma/prisma",
-    title: "Prisma",
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-  },
-];
+// type (mockInbox) -> kind (API/ProcessScreen)
+const TYPE_TO_KIND = { text: "note", link: "link", voice: "audio", file: "file" };
+
+// Copia mutable de mockInbox con `kind` para ProcessScreen; mismo dataset que la pantalla Inbox
+let mockItems = MOCK_INBOX_ITEMS.map((item) => ({
+  ...item,
+  kind: TYPE_TO_KIND[item.type] ?? "note",
+}));
 
 let mockIdCounter = 100;
 
@@ -38,19 +22,20 @@ function addMockToInbox(payload) {
   const rawInput = payload.rawInput ?? payload.content ?? payload.url ?? "";
   const isUrl = /^https?:\/\//i.test(rawInput.trim());
   const id = `mock-${++mockIdCounter}`;
+  const type = isUrl ? "link" : "text";
   const item = isUrl
     ? {
-        kind: "link",
         id,
+        kind: "link",
         type: "generic",
         url: rawInput.trim(),
         title: null,
         createdAt: new Date().toISOString(),
       }
     : {
-        kind: "note",
         id,
-        type: "note",
+        kind: "note",
+        type: "text",
         content: rawInput.trim(),
         createdAt: new Date().toISOString(),
       };

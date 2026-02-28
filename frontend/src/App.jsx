@@ -6,13 +6,15 @@ import FilterBottomSheet from "./components/Inbox/FilterBottomSheet";
 import InboxList from "./components/Inbox/InboxList";
 import FooterCapture from "./components/Inbox/FooterCapture";
 import ProcessScreen from "./components/Process/ProcessScreen";
+import VaultScreen from "./components/Vault/VaultScreen";
+import SettingsScreen from "./components/Settings/SettingsScreen";
 import { getInbox, addToInbox } from "./api/client";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
 function filterByKind(items, typeFilter) {
   if (typeFilter === "all") return items;
-  const kindMap = { text: "note", links: "link", voice: "audio", files: "file" };
+  const kindMap = { text: "note", links: "link", voice: "audio", files: "file", video: "video" };
   const kind = kindMap[typeFilter];
   return kind ? items.filter((i) => i.kind === kind) : items;
 }
@@ -58,12 +60,26 @@ export default function App() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [view, setView] = useState("inbox");
+  const [currentView, setCurrentView] = useState("inbox");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(!USE_MOCK);
   const [error, setError] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("all_dates");
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem("digitalbrain-theme") !== "light";
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+    try {
+      localStorage.setItem("digitalbrain-theme", darkMode ? "dark" : "light");
+    } catch {}
+  }, [darkMode]);
 
   const loadInbox = useCallback(async () => {
     if (USE_MOCK) {
@@ -86,8 +102,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (view === "inbox") loadInbox();
-  }, [view, loadInbox]);
+    if (currentView === "inbox") loadInbox();
+  }, [currentView, loadInbox]);
 
   const handleAddToInbox = useCallback(async (payload) => {
     try {
@@ -106,12 +122,37 @@ export default function App() {
     return filterBySearch(byDate, searchQuery);
   }, [items, typeFilter, dateFilter, searchQuery]);
 
-  if (view === "process") {
+  const handleNavigate = useCallback((view) => {
+    setCurrentView(view);
+    setSidebarOpen(false);
+  }, []);
+
+  if (currentView === "procesando") {
     return (
       <MobileFrame>
         <ProcessScreen
-          onBack={() => setView("inbox")}
+          onBack={() => setCurrentView("inbox")}
           onProcessDone={loadInbox}
+        />
+      </MobileFrame>
+    );
+  }
+
+  if (currentView === "procesado") {
+    return (
+      <MobileFrame>
+        <VaultScreen onBack={() => setCurrentView("inbox")} />
+      </MobileFrame>
+    );
+  }
+
+  if (currentView === "ajustes") {
+    return (
+      <MobileFrame>
+        <SettingsScreen
+          onBack={() => setCurrentView("inbox")}
+          darkMode={darkMode}
+          onDarkModeChange={setDarkMode}
         />
       </MobileFrame>
     );
@@ -119,7 +160,7 @@ export default function App() {
 
   return (
     <MobileFrame>
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} onNavigate={handleNavigate} />
       <FilterBottomSheet
         isOpen={filterSheetOpen}
         onClose={() => setFilterSheetOpen(false)}
@@ -129,7 +170,7 @@ export default function App() {
         onDateFilter={setDateFilter}
       />
 
-      <div className="flex flex-col min-h-screen">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <Header
           onMenuClick={() => setSidebarOpen(true)}
           onFilterClick={() => setFilterSheetOpen(true)}
@@ -138,14 +179,14 @@ export default function App() {
           isSearchOpen={searchOpen}
           onSearchOpenChange={setSearchOpen}
         />
-        <main className="flex-1 overflow-y-auto pb-2">
+        <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-4 scrollbar-hide">
           {error && (
-            <div className="mx-4 mt-2 p-3 rounded-lg bg-red-500/20 text-red-300 text-sm">
+            <div className="mx-4 mt-2 p-3 rounded-lg bg-red-500/20 text-red-700 dark:text-red-300 text-sm">
               {error}
             </div>
           )}
           {loading ? (
-            <div className="flex items-center justify-center py-12 text-zinc-500 text-sm">
+            <div className="flex items-center justify-center py-12 text-zinc-600 dark:text-zinc-500 text-sm">
               Cargando inbox…
             </div>
           ) : (
@@ -154,7 +195,7 @@ export default function App() {
         </main>
         <FooterCapture
           pendingCount={filteredItems.length}
-          onProcessClick={() => setView("process")}
+          onProcessClick={() => setCurrentView("procesando")}
           onAdd={handleAddToInbox}
         />
       </div>

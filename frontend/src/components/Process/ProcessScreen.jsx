@@ -1,25 +1,55 @@
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Loader2, Check, FolderOpen } from "lucide-react";
-import { getInbox, processItems } from "../../api/client";
+import {
+  ArrowLeft,
+  Loader2,
+  Link2,
+  Mic,
+  FileText,
+  File,
+  Trash2,
+  Pencil,
+  Check,
+  ChevronDown,
+  Folder,
+} from "lucide-react";
+import { getInbox } from "../../api/client";
 
-export default function ProcessScreen({ onBack, onProcessDone }) {
+const ICON_BY_KIND = {
+  link: Link2,
+  note: FileText,
+  audio: Mic,
+  file: File,
+};
+
+const MOCK_FOLDERS = [
+  "estudio/SI",
+  "proyectos/HackUDC",
+  "referencias/React",
+  "inbox",
+];
+
+function getRawPreview(item) {
+  if (item.content) return item.content;
+  if (item.url) return item.title ? `${item.title}\n${item.url}` : item.url;
+  if (item.filename) return item.filename;
+  if (item.kind === "audio") return "Nota de voz";
+  return "Sin contenido";
+}
+
+export default function ProcessScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [destination, setDestination] = useState("inbox");
-  const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [suggestedFolder, setSuggestedFolder] = useState(MOCK_FOLDERS[0]);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const { items: data } = await getInbox();
       setItems(Array.isArray(data) ? data : []);
-      setSelectedIds(new Set());
-    } catch (err) {
-      setError(err.message);
+      setCurrentIndex(0);
+    } catch {
       setItems([]);
     } finally {
       setLoading(false);
@@ -30,155 +60,188 @@ export default function ProcessScreen({ onBack, onProcessDone }) {
     loadInbox();
   }, [loadInbox]);
 
-  const toggleItem = (id) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const currentItem = items[currentIndex];
+  const total = items.length;
+  const progress = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
+
+  const handleDescartar = () => {
+    if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
+    else onBack();
   };
 
-  const selectAll = () => {
-    if (selectedIds.size === items.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(items.map((i) => i.id)));
-    }
-  };
-
-  const handleProcess = async () => {
-    if (selectedIds.size === 0 || !destination.trim()) return;
-    const ids = items
-      .filter((i) => selectedIds.has(i.id))
-      .map((i) => ({ kind: i.kind, id: i.id }));
-    setProcessing(true);
-    setError(null);
-    try {
-      const data = await processItems(ids, destination.trim());
-      setResult(data);
-      if (onProcessDone) await onProcessDone();
-      onBack();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setProcessing(false);
-    }
+  const handleAprobar = () => {
+    if (currentIndex < items.length - 1) setCurrentIndex((i) => i + 1);
+    else onBack();
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-zinc-900">
-        <header className="sticky top-0 z-10 flex items-center gap-3 h-14 px-4 bg-zinc-900 border-b border-zinc-800 safe-top">
-          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-800" aria-label="Volver">
-            <ArrowLeft className="w-6 h-6 text-zinc-300" />
+      <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
+        <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
+          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Volver">
+            <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
           </button>
-          <h1 className="text-lg font-semibold text-zinc-100">Procesar notas</h1>
+          <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
+          <div className="w-10" />
         </header>
         <main className="flex-1 flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-zinc-500 animate-spin" />
+          <Loader2 className="w-8 h-8 text-brand-500 dark:text-zinc-500 animate-spin" />
         </main>
       </div>
     );
   }
 
+  if (items.length === 0) {
+    return (
+      <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900">
+        <header className="shrink-0 z-10 flex items-center h-14 px-4 bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
+          <button type="button" onClick={onBack} className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800" aria-label="Volver">
+            <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
+          </button>
+          <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Procesar notas</h1>
+          <div className="w-10" />
+        </header>
+        <main className="flex-1 flex items-center justify-center px-6">
+          <p className="text-zinc-600 dark:text-zinc-500 text-sm text-center">No hay notas en el inbox.</p>
+        </main>
+      </div>
+    );
+  }
+
+  const IconComponent = ICON_BY_KIND[currentItem.kind] ?? FileText;
+  const rawPreview = getRawPreview(currentItem);
+
   return (
-    <div className="min-h-screen flex flex-col bg-zinc-900">
-      <header className="sticky top-0 z-10 flex items-center gap-3 h-14 px-4 bg-zinc-900 border-b border-zinc-800 safe-top">
-        <button
-          type="button"
-          onClick={onBack}
-          className="p-2 -ml-2 rounded-lg hover:bg-zinc-800 transition-colors"
-          aria-label="Volver al inbox"
-        >
-          <ArrowLeft className="w-6 h-6 text-zinc-300" />
-        </button>
-        <h1 className="text-lg font-semibold text-zinc-100">Procesar notas</h1>
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-zinc-900 safe-bottom">
+      <header className="shrink-0 z-20 flex flex-col bg-white border-b border-zinc-200 safe-top dark:bg-zinc-900 dark:border-zinc-800">
+        <div className="flex items-center h-14 px-4">
+          <button
+            type="button"
+            onClick={onBack}
+            className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            aria-label="Volver al inbox"
+          >
+            <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
+          </button>
+          <div className="flex-1 flex flex-col items-center justify-center py-1">
+            <p className="text-zinc-900 dark:text-zinc-100 font-medium text-sm">
+              Procesando {currentIndex + 1} de {total}
+            </p>
+            <div className="w-32 h-1.5 mt-1 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-brand-500 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+          <div className="w-10" />
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 space-y-4">
-        {error && (
-          <div className="p-3 rounded-lg bg-red-500/20 text-red-300 text-sm">
-            {error}
+      <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-5 space-y-6 py-5 pb-4 scrollbar-hide">
+        {/* 2. Tarjeta Entrada Original (secundaria) */}
+        <section className="rounded-2xl bg-zinc-100 border border-zinc-200 p-4 dark:bg-gray-800/40 dark:border-gray-700/50">
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-brand-500/10 dark:bg-gray-700/60 flex items-center justify-center">
+              <IconComponent className="w-5 h-5 text-brand-500 dark:text-gray-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-zinc-500 dark:text-gray-500 text-xs uppercase tracking-wider mb-1">Entrada original</p>
+              <p className="text-zinc-700 dark:text-gray-400 text-sm whitespace-pre-wrap break-words line-clamp-6">
+                {rawPreview}
+              </p>
+            </div>
           </div>
-        )}
+        </section>
 
-        <div>
-          <label className="flex items-center gap-2 text-zinc-400 text-sm mb-2">
-            <FolderOpen className="w-4 h-4" />
-            Carpeta de destino (en knowledge)
-          </label>
-          <input
-            type="text"
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            placeholder="ej. estudio/SI"
-            className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 outline-none focus:ring-2 focus:ring-brand-500"
-          />
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-zinc-400 text-sm">
-            {items.length} ítem(s) en inbox
-          </span>
-          <button
-            type="button"
-            onClick={selectAll}
-            className="text-brand-400 hover:text-brand-300 text-sm"
-          >
-            {selectedIds.size === items.length ? "Quitar todos" : "Seleccionar todos"}
-          </button>
-        </div>
-
-        {items.length === 0 ? (
-          <p className="text-zinc-500 text-sm text-center py-8">
-            No hay nada en el inbox. Añade notas o enlaces desde la pantalla principal.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {items.map((item) => (
-              <li key={item.id}>
-                <label className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/80 border border-zinc-700/50 cursor-pointer hover:bg-zinc-800">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(item.id)}
-                    onChange={() => toggleItem(item.id)}
-                    className="rounded border-zinc-600 text-brand-500 focus:ring-brand-500"
-                  />
-                  <span className="flex-1 min-w-0 truncate text-zinc-200 text-sm">
-                    {item.kind === "note" && item.content?.slice(0, 50)}
-                    {item.kind === "link" && (item.title || item.url)}
-                    {item.kind === "file" && item.filename}
-                    {item.kind === "audio" && "Nota de voz"}
-                  </span>
-                  <span className="text-zinc-500 text-xs capitalize">{item.kind}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="pt-4">
-          <button
-            type="button"
-            onClick={handleProcess}
-            disabled={selectedIds.size === 0 || !destination.trim() || processing}
-            className="w-full py-3 px-4 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-2"
-          >
-            {processing ? (
+        {/* 3. Tarjeta Sugerencia de IA (protagonista) */}
+        <section className="rounded-2xl bg-zinc-50 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10 p-4 dark:bg-gray-800 dark:border-blue-500/40 dark:shadow-blue-500/10">
+          <div className="relative mb-4">
+            <button
+              type="button"
+              onClick={() => setDropdownOpen((o) => !o)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 rounded-full bg-white border border-zinc-200 text-brand-600 text-sm font-medium dark:bg-gray-900 dark:border-0 dark:text-blue-400/90 cursor-pointer"
+            >
+              <Folder className="w-4 h-4 text-brand-500 dark:text-blue-400/80 flex-shrink-0" />
+              <span className="flex-1 text-left truncate">{suggestedFolder}</span>
+              <ChevronDown className={`w-4 h-4 text-zinc-400 dark:text-gray-400 flex-shrink-0 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
+            </button>
+            {dropdownOpen && (
               <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Procesando…
-              </>
-            ) : (
-              <>
-                <Check className="w-5 h-5" />
-                Procesar {selectedIds.size} seleccionado(s)
+                <div className="fixed inset-0 z-10" onClick={() => setDropdownOpen(false)} aria-hidden />
+                <ul className="absolute top-full left-0 right-0 mt-2 z-20 py-1 rounded-2xl bg-white border border-zinc-200 shadow-xl max-h-48 overflow-y-auto dark:bg-gray-900 dark:border-gray-700">
+                  {MOCK_FOLDERS.map((folder) => (
+                    <li key={folder}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSuggestedFolder(folder);
+                          setDropdownOpen(false);
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-sm hover:bg-zinc-100 dark:hover:bg-gray-800 flex items-center gap-2 ${suggestedFolder === folder ? "text-brand-600 dark:text-blue-400" : "text-zinc-800 dark:text-gray-200"}`}
+                      >
+                        <Folder className="w-4 h-4 opacity-70" />
+                        {folder}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </>
             )}
-          </button>
-        </div>
+          </div>
+
+          <div className="mb-4">
+            <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+              Nota procesada — {currentItem.kind === "link" ? "Enlace" : currentItem.kind === "audio" ? "Voz" : currentItem.type || "Nota"}
+            </h3>
+            <ul className="list-disc list-inside space-y-2 text-zinc-700 dark:text-gray-200 text-sm">
+              <li>Punto principal extraído de la entrada</li>
+              <li>Segundo punto o referencia</li>
+              <li>Contexto o acción sugerida</li>
+            </ul>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {["#React", "#Frontend", "#HackUDC"].map((tag) => (
+              <span
+                key={tag}
+                className="bg-brand-500/10 text-brand-600 dark:bg-blue-500/10 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </section>
       </main>
+
+      <footer className="shrink-0 z-20 grid grid-cols-3 gap-3 w-full px-5 pt-4 pb-6 bg-white border-t border-zinc-200 safe-bottom dark:bg-zinc-900 dark:border-zinc-800">
+        <button
+          type="button"
+          onClick={handleDescartar}
+          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl border border-red-400/50 text-red-600 hover:bg-red-500/10 transition-colors dark:border-red-500/30 dark:text-red-400 dark:hover:bg-red-500/10"
+          aria-label="Descartar"
+        >
+          <Trash2 className="w-6 h-6" />
+          <span className="text-xs font-medium">Descartar</span>
+        </button>
+        <button
+          type="button"
+          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl border border-zinc-300 text-zinc-600 hover:bg-zinc-100 transition-colors dark:border-gray-500/30 dark:text-gray-300 dark:hover:bg-gray-500/10"
+          aria-label="Editar"
+        >
+          <Pencil className="w-6 h-6" />
+          <span className="text-xs font-medium">Editar</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleAprobar}
+          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-lg shadow-emerald-500/20"
+          aria-label="Aprobar"
+        >
+          <Check className="w-6 h-6" />
+          <span className="text-xs font-medium">Aprobar</span>
+        </button>
+      </footer>
     </div>
   );
 }
