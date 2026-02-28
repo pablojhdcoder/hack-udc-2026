@@ -12,6 +12,7 @@ model Link {
   url            String
   type           String   // youtube, twitch, telegram, article, generic
   title          String?
+  topic          String?
   metadata       String?  // JSON: preview, channel, etc.
   aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
   createdAt      DateTime @default(now())
@@ -25,6 +26,7 @@ model File {
   type           String   // pdf, word, image, ...
   filename       String
   size           Int?
+  topic          String?
   aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints, extractedText)
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
@@ -37,6 +39,7 @@ model Audio {
   type           String   // voice_note, podcast, ...
   duration       Int?     // segundos
   transcription  String?
+  topic          String?
   aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
@@ -47,7 +50,21 @@ model Note {
   id             String   @id @default(cuid())
   content        String
   type           String   // note, code, task, idea
+  topic          String?
   aiEnrichment   String?  // JSON: AI-generated metadata (title, summary, tags, topics, keyPoints)
+  createdAt      DateTime @default(now())
+  inboxStatus    String   @default("pending")
+  processedPath  String?
+}
+
+model Video {
+  id             String   @id @default(cuid())
+  filePath       String
+  type           String   // mp4, webm, youtube_downloaded, ...
+  duration       Int?     // segundos
+  title          String?
+  topic          String?
+  aiEnrichment   String?  // JSON: AI-generated metadata (summary, tags, topics, keyPoints)
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")
   processedPath  String?
