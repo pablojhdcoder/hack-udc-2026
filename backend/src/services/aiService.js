@@ -17,7 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const apiKey = process.env.GEMINI_API_KEY ?? "";
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
-const model = genAI ? genAI.getGenerativeModel({ model: "gemini-1.5-pro" }) : null;
+const model = genAI ? genAI.getGenerativeModel({ model: "gemini-flash-latest" }) : null;
 
 export function isAIEnabled() {
   return !!process.env.GEMINI_API_KEY;
