@@ -11,6 +11,7 @@ import {
   Check,
   ChevronDown,
   Folder,
+  Save,
 } from "lucide-react";
 import { getInbox } from "../../api/client";
 
@@ -28,6 +29,8 @@ const MOCK_FOLDERS = [
   "inbox",
 ];
 
+const DEFAULT_NOTE_BODY = "Punto principal extraído de la entrada\nSegundo punto o referencia\nContexto o acción sugerida";
+
 function getRawPreview(item) {
   if (item.content) return item.content;
   if (item.url) return item.title ? `${item.title}\n${item.url}` : item.url;
@@ -42,6 +45,8 @@ export default function ProcessScreen({ onBack }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [suggestedFolder, setSuggestedFolder] = useState(MOCK_FOLDERS[0]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(DEFAULT_NOTE_BODY);
 
   const loadInbox = useCallback(async () => {
     setLoading(true);
@@ -59,6 +64,11 @@ export default function ProcessScreen({ onBack }) {
   useEffect(() => {
     loadInbox();
   }, [loadInbox]);
+
+  useEffect(() => {
+    setEditedContent(DEFAULT_NOTE_BODY);
+    setIsEditing(false);
+  }, [currentIndex]);
 
   const currentItem = items[currentIndex];
   const total = items.length;
@@ -190,15 +200,45 @@ export default function ProcessScreen({ onBack }) {
             )}
           </div>
 
-          <div className="mb-4">
-            <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2">
+          <div className="mb-4 relative">
+            <div className="absolute top-0 right-0 z-10">
+              {isEditing ? (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="p-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white transition-colors"
+                  aria-label="Guardar"
+                >
+                  <Save className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-white dark:hover:text-white transition-colors hover:bg-gray-700/50"
+                  aria-label="Editar"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-2 pr-10">
               Nota procesada — {currentItem.kind === "link" ? "Enlace" : currentItem.kind === "audio" ? "Voz" : currentItem.type || "Nota"}
             </h3>
-            <ul className="list-disc list-inside space-y-2 text-zinc-700 dark:text-gray-200 text-sm">
-              <li>Punto principal extraído de la entrada</li>
-              <li>Segundo punto o referencia</li>
-              <li>Contexto o acción sugerida</li>
-            </ul>
+            {isEditing ? (
+              <textarea
+                value={editedContent}
+                onChange={(e) => setEditedContent(e.target.value)}
+                className="w-full min-h-[120px] rounded-lg bg-gray-900 text-white p-3 border border-gray-700 text-sm resize-y outline-none focus:ring-2 focus:ring-brand-500/50"
+                placeholder="Edita el contenido de la nota..."
+              />
+            ) : (
+              <ul className="list-disc list-inside space-y-2 text-zinc-700 dark:text-gray-200 text-sm">
+                {editedContent.split("\n").filter(Boolean).map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -214,7 +254,7 @@ export default function ProcessScreen({ onBack }) {
         </section>
       </main>
 
-      <footer className="shrink-0 z-20 grid grid-cols-3 gap-3 w-full px-5 pt-4 pb-6 bg-white border-t border-zinc-200 safe-bottom dark:bg-zinc-900 dark:border-zinc-800">
+      <footer className="shrink-0 z-20 grid grid-cols-2 gap-3 w-full px-5 pt-4 pb-6 bg-white border-t border-zinc-200 safe-bottom dark:bg-zinc-900 dark:border-zinc-800">
         <button
           type="button"
           onClick={handleDescartar}
@@ -223,14 +263,6 @@ export default function ProcessScreen({ onBack }) {
         >
           <Trash2 className="w-6 h-6" />
           <span className="text-xs font-medium">Descartar</span>
-        </button>
-        <button
-          type="button"
-          className="flex flex-col items-center justify-center gap-2 py-4 px-2 rounded-xl border border-zinc-300 text-zinc-600 hover:bg-zinc-100 transition-colors dark:border-gray-500/30 dark:text-gray-300 dark:hover:bg-gray-500/10"
-          aria-label="Editar"
-        >
-          <Pencil className="w-6 h-6" />
-          <span className="text-xs font-medium">Editar</span>
         </button>
         <button
           type="button"
