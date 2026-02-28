@@ -104,7 +104,13 @@ router.post("/", optionalMulter, async (req, res) => {
 
     // ── Multipart: fichero subido ──
     if (req.file) {
-      const { kind, type } = classifyFile(req.file.originalname);
+      let { kind, type } = classifyFile(req.file.originalname, req.file?.mimetype);
+      const allowedFileKinds = ["audio", "video", "photo", "file"];
+      if (!allowedFileKinds.includes(kind)) {
+        kind = "file";
+        type = type || "unknown";
+      }
+      type = type || (kind === "photo" ? "image" : kind === "file" ? "unknown" : kind);
       const relativePath = path.relative(process.cwd(), req.file.path).replace(/\\/g, "/");
 
       if (kind === "audio") {
@@ -224,10 +230,16 @@ router.post("/", optionalMulter, async (req, res) => {
       });
     }
 
-    const { kind, type } = classifyInput(raw.trim());
+    let { kind, type } = classifyInput(raw.trim());
+    if (kind !== "link" && kind !== "note") {
+      kind = "note";
+      type = type || "note";
+    }
+    type = type || (kind === "link" ? "generic" : "note");
 
     if (kind === "link") {
-      const url = raw.trim();
+      let url = raw.trim();
+      if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
       const link = await prisma.link.create({
         data: {
           url,
