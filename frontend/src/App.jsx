@@ -9,6 +9,7 @@ import FooterCapture from "./components/Inbox/FooterCapture";
 import ProcessScreen from "./components/Process/ProcessScreen";
 import VaultScreen from "./components/Vault/VaultScreen";
 import CalendarioView from "./components/Calendario/CalendarioView";
+import TemasView from "./components/Temas/TemasView";
 import SettingsScreen from "./components/Settings/SettingsScreen";
 import CentroAyudaView from "./components/Settings/CentroAyudaView";
 import { getInbox, addToInbox, discardItem } from "./api/client";
@@ -206,6 +207,20 @@ export default function App() {
           }}
           initialFolder={vaultInitial.folder}
           initialItemId={vaultInitial.itemId}
+        />
+      </MobileFrame>
+    );
+  }
+
+  if (currentView === "temas") {
+    return (
+      <MobileFrame>
+        <TemasView
+          onBack={() => setCurrentView("inbox")}
+          onSelectItem={(item) => {
+            setVaultInitial({ folder: item.kind, itemId: item.id ?? null });
+            setCurrentView("procesado");
+          }}
         />
       </MobileFrame>
     );

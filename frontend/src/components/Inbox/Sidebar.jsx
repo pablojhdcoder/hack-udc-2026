@@ -1,4 +1,4 @@
-import { X, Inbox, FolderOpen, Calendar, Settings, Brain } from "lucide-react";
+import { X, Inbox, FolderOpen, FolderTree, Calendar, Settings, Brain } from "lucide-react";
 import { useAppLanguage } from "../../context/LanguageContext";
 
 export default function Sidebar({ isOpen, onClose, onNavigate, onOpenChat }) {
@@ -53,6 +53,14 @@ export default function Sidebar({ isOpen, onClose, onNavigate, onOpenChat }) {
           >
             <FolderOpen className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
             {t("sidebar.processed")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("temas")}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
+          >
+            <FolderTree className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
+            {t("sidebar.topics")}
           </button>
           <button
             type="button"
