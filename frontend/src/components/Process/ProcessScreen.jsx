@@ -83,10 +83,10 @@ function getRawPreview(item, t) {
   return t("common.noContent");
 }
 
-export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
+export default function ProcessScreen({ initialItems, onBack, onProcessDone, onOpenVault }) {
   const { t } = useAppLanguage();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [items, setItems] = useState(Array.isArray(initialItems) ? initialItems : []);
+  const [loading, setLoading] = useState(!Array.isArray(initialItems));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
@@ -112,8 +112,13 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
   }, []);
 
   useEffect(() => {
+    if (Array.isArray(initialItems)) {
+      setItems(initialItems);
+      setLoading(false);
+      return;
+    }
     loadInbox();
-  }, [loadInbox]);
+  }, [loadInbox, initialItems]);
 
   useEffect(() => {
     const item = items[currentIndex];

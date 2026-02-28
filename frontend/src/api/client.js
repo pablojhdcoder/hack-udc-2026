@@ -277,3 +277,14 @@ export async function removeFromFavorites(favoriteId) {
   if (!res.ok) throw new Error(await res.text());
 }
 
+/**
+ * Todos los ítems (todos los estados, todos los tipos) para exportar.
+ * Llama a GET /api/inbox/export que no filtra por inboxStatus.
+ */
+export async function getAllItemsForExport() {
+  if (USE_MOCK) return [...mockItems];
+  const res = await fetch(`${API_BASE}/inbox/export`);
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}

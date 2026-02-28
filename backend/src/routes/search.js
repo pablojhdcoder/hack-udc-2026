@@ -16,13 +16,11 @@ function parseAI(raw) {
 
 /**
  * Calcula la puntuación de relevancia de un item frente a los tokens de búsqueda.
- * Compara cada token contra: aiTitle, aiTags, topic, aiTopics, aiCategory, filename.
+ * Compara cada token contra: aiTitle, aiTags/aiTopics (mismo concepto), aiCategory, filename.
  *
  * Sistema de pesos:
  *   aiTitle       → exacto: 20 | parcial: 10
- *   aiTags        → exacto: 15 | parcial:  8
- *   topic (DB)    → exacto: 15 | parcial:  8
- *   aiTopics      → exacto: 12 | parcial:  6
+ *   aiTags/aiTopics → exacto: 15 | parcial: 8  (topics del enrichment, única fuente)
  *   aiCategory    → exacto: 10 | parcial:  5
  *   filename/url  → parcial:  3
  *
@@ -34,11 +32,11 @@ function scoreItem(item, tokens) {
 
   const lc = (s) => (s ?? "").toString().toLowerCase();
 
-  const title   = lc(item.aiTitle ?? item.title ?? item.filename);
-  const fname   = lc(item.filename ?? item.url ?? "");
-  const cat     = lc(item.aiCategory);
-  const tags    = (item.aiTags ?? []).map((t) => lc(t));
-  const topics  = (item.aiTopics ?? []).map((t) => lc(t));
+  const title = lc(item.aiTitle ?? item.title ?? item.filename);
+  const fname = lc(item.filename ?? item.url ?? "");
+  const cat   = lc(item.aiCategory);
+  // Tags y topics son el mismo concepto: array de aiEnrichment.topics
+  const tags  = (item.aiTags ?? item.aiTopics ?? []).map((t) => lc(t));
 
   let totalScore = 0;
   const matchedTokens = new Set();
@@ -47,27 +45,21 @@ function scoreItem(item, tokens) {
     let tokenScore = 0;
 
     // --- aiTitle (prioridad máxima) ---
-    if (title === token)         { tokenScore += 20; matchedTokens.add(token); }
-    else if (title.includes(token)) { tokenScore += 10; matchedTokens.add(token); }
+    if (title === token)             { tokenScore += 20; matchedTokens.add(token); }
+    else if (title.includes(token))  { tokenScore += 10; matchedTokens.add(token); }
 
-    // --- aiTags ---
+    // --- aiTags/aiTopics (topics del enrichment: prioridad alta 15/8) ---
     for (const tag of tags) {
-      if (tag === token)            { tokenScore += 15; matchedTokens.add(token); break; }
-      else if (tag.includes(token)) { tokenScore +=  8; matchedTokens.add(token); break; }
-    }
-
-    // --- aiTopics (incluye el topic singular ya mezclado en el array) ---
-    for (const t of topics) {
-      if (t === token)            { tokenScore += 12; matchedTokens.add(token); break; }
-      else if (t.includes(token)) { tokenScore +=  6; matchedTokens.add(token); break; }
+      if (tag === token)             { tokenScore += 15; matchedTokens.add(token); break; }
+      else if (tag.includes(token))  { tokenScore +=  8; matchedTokens.add(token); break; }
     }
 
     // --- aiCategory ---
-    if (cat === token)            { tokenScore += 10; matchedTokens.add(token); }
-    else if (cat.includes(token)) { tokenScore +=  5; matchedTokens.add(token); }
+    if (cat === token)               { tokenScore += 10; matchedTokens.add(token); }
+    else if (cat.includes(token))    { tokenScore +=  5; matchedTokens.add(token); }
 
     // --- filename / url (fallback) ---
-    if (fname.includes(token))    { tokenScore +=  3; matchedTokens.add(token); }
+    if (fname.includes(token))       { tokenScore +=  3; matchedTokens.add(token); }
 
     totalScore += tokenScore;
   }
@@ -82,7 +74,7 @@ function scoreItem(item, tokens) {
 /**
  * GET /api/search?q=...
  * Busca en todas las entidades del vault comparando la query (tokenizada) contra:
- *   title, tags, topic, topics y category de la IA, además de filename/url/content.
+ *   title, topics (tags), category de la IA, además de filename/url/content.
  * Devuelve array ordenado de mayor a menor relevancia, con campo `score`.
  */
 router.get("/search", async (req, res) => {
@@ -108,7 +100,7 @@ router.get("/search", async (req, res) => {
             ...aiTokenFilters,
           ],
         },
-        select: { id: true, content: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, content: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.link.findMany({
         where: {
@@ -119,19 +111,19 @@ router.get("/search", async (req, res) => {
             ...aiTokenFilters,
           ],
         },
-        select: { id: true, url: true, title: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, url: true, title: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.file.findMany({
         where: {
           OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters],
         },
-        select: { id: true, filename: true, filePath: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filename: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.photo.findMany({
         where: {
           OR: [{ filename: { contains: raw } }, aiFilter, ...aiTokenFilters],
         },
-        select: { id: true, filename: true, filePath: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filename: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.audio.findMany({
         where: {
@@ -142,13 +134,13 @@ router.get("/search", async (req, res) => {
             ...aiTokenFilters,
           ],
         },
-        select: { id: true, filePath: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filePath: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
       prisma.video.findMany({
         where: {
           OR: [{ filePath: { contains: raw } }, { title: { contains: raw } }, aiFilter, ...aiTokenFilters],
         },
-        select: { id: true, filePath: true, title: true, topic: true, aiEnrichment: true, processedPath: true, createdAt: true },
+        select: { id: true, filePath: true, title: true, aiEnrichment: true, processedPath: true, createdAt: true },
       }),
     ]);
 
@@ -159,17 +151,14 @@ router.get("/search", async (req, res) => {
 
     const normalizeAI = (raw) => {
       const ai = parseAI(raw);
-      const topicsArr = Array.isArray(ai?.topics) ? ai.topics : [];
-      const singular  = ai?.topic ?? null;
-      // Mezclar el topic singular en el array si no está ya incluido
-      const allTopics = singular && !topicsArr.some((t) => t?.toLowerCase() === singular.toLowerCase())
-        ? [singular, ...topicsArr]
-        : topicsArr;
+      const allTopics = Array.isArray(ai?.topics) ? ai.topics : [];
+      // Tags y topics son el mismo concepto; aiTags se usa para scoring alto (15/8)
       return {
         aiTitle:    ai?.title    ?? null,
-        aiTags:     Array.isArray(ai?.tags) ? ai.tags : [],
+        aiTags:     allTopics,
         aiTopics:   allTopics,
         aiCategory: ai?.category ?? null,
+        topic:      allTopics[0] ?? null, // badge único para la UI
       };
     };
 
@@ -188,7 +177,6 @@ router.get("/search", async (req, res) => {
         kind: "note",
         filename: n.content?.slice(0, 80) || "Nota",
         title: n.content?.slice(0, 80) || null,
-        topic: n.topic ?? null,
         processedPath: n.processedPath,
         createdAt: n.createdAt,
         ...normalizeAI(n.aiEnrichment),
@@ -199,7 +187,6 @@ router.get("/search", async (req, res) => {
         filename: l.title || l.url?.slice(0, 50) || "Enlace",
         title: l.title,
         url: l.url,
-        topic: l.topic ?? null,
         processedPath: l.processedPath,
         createdAt: l.createdAt,
         ...normalizeAI(l.aiEnrichment),
@@ -209,7 +196,6 @@ router.get("/search", async (req, res) => {
         kind: "file",
         filename: f.filename,
         filePath: f.filePath,
-        topic: f.topic ?? null,
         processedPath: f.processedPath,
         createdAt: f.createdAt,
         ...normalizeAI(f.aiEnrichment),
@@ -220,7 +206,6 @@ router.get("/search", async (req, res) => {
         filename: p.filename,
         filePath: p.filePath,
         thumbnailUrl: toUrl(p.filePath),
-        topic: p.topic ?? null,
         processedPath: p.processedPath,
         createdAt: p.createdAt,
         ...normalizeAI(p.aiEnrichment),
@@ -230,7 +215,6 @@ router.get("/search", async (req, res) => {
         kind: "audio",
         filename: path.basename(a.filePath) || "Audio",
         filePath: a.filePath,
-        topic: a.topic ?? null,
         processedPath: a.processedPath,
         createdAt: a.createdAt,
         ...normalizeAI(a.aiEnrichment),
@@ -242,7 +226,6 @@ router.get("/search", async (req, res) => {
         title: v.title,
         filePath: v.filePath,
         thumbnailUrl: null,
-        topic: v.topic ?? null,
         processedPath: v.processedPath,
         createdAt: v.createdAt,
         ...normalizeAI(v.aiEnrichment),
