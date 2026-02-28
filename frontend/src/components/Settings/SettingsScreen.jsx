@@ -15,15 +15,9 @@ import {
   ChevronRight,
   X,
 } from "lucide-react";
-
-const LANGUAGES = [
-  { id: "es", label: "Español" },
-  { id: "en", label: "English" },
-  { id: "fr", label: "Français" },
-  { id: "pt", label: "Português" },
-  { id: "it", label: "Italiano" },
-  { id: "de", label: "Deutsch" },
-];
+import { useAppLanguage } from "../../context/LanguageContext";
+import LanguageBottomSheet from "./LanguageBottomSheet";
+import { translations } from "../../i18n/translations";
 
 const ASSIST_LEVELS = ["Manual", "Equilibrado", "Automático"];
 
@@ -191,8 +185,8 @@ function Toast({ message, visible, onDismiss }) {
 }
 
 export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChange }) {
+  const { locale, t } = useAppLanguage();
   const [languageSheetOpen, setLanguageSheetOpen] = useState(false);
-  const [summaryLanguageId, setSummaryLanguageId] = useState("es");
   const [suggestionsOn, setSuggestionsOn] = useState(true);
 
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
@@ -206,7 +200,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
   const [toastVisible, setToastVisible] = useState(false);
   const [editProfileSheetOpen, setEditProfileSheetOpen] = useState(false);
 
-  const selectedLanguage = LANGUAGES.find((l) => l.id === summaryLanguageId) ?? LANGUAGES[0];
+  const selectedLanguageLabel = translations[locale]?.languages?.[locale] ?? translations.es.languages.es;
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
@@ -219,7 +213,7 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
         >
           <ArrowLeft className="w-6 h-6 text-zinc-600 dark:text-zinc-300" />
         </button>
-        <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">Ajustes</h1>
+        <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t("settings.title")}</h1>
         <div className="w-10" />
       </header>
 
@@ -237,106 +231,70 @@ export default function SettingsScreen({ onBack, darkMode = true, onDarkModeChan
 
         <SettingsGroup title="General">
           <div className={ROW_BASE}>
-            <SettingsRow icon={Moon} label="Modo Oscuro">
+            <SettingsRow icon={Moon} label={t("settings.darkMode")}>
               <ToggleSwitch on={darkMode} onClick={() => onDarkModeChange?.(!darkMode)} />
             </SettingsRow>
           </div>
           <div className={ROW_BASE}>
-            <SettingsRow icon={Bell} label="Sugerencias de revisión">
+            <SettingsRow icon={Bell} label={t("settings.reviewSuggestions")}>
               <ToggleSwitch on={suggestionsOn} onClick={() => setSuggestionsOn((v) => !v)} />
             </SettingsRow>
           </div>
         </SettingsGroup>
 
-        <SettingsGroup title="Datos y privacidad">
+        <SettingsGroup title={t("settings.dataPrivacy")}>
           <button type="button" onClick={() => setExportSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={FileDown} label="Exportar mis notas">
+            <SettingsRow icon={FileDown} label={t("settings.exportNotes")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
           <button type="button" onClick={() => setCloudSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Cloud} label="Copia de seguridad en la nube">
+            <SettingsRow icon={Cloud} label={t("settings.cloudBackup")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
           <button type="button" onClick={() => setFreeSpaceModalOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Trash2} label="Liberar espacio">
+            <SettingsRow icon={Trash2} label={t("settings.freeSpace")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
 
-        <SettingsGroup title="Inteligencia Artificial">
+        <SettingsGroup title={t("settings.ai")}>
           <button type="button" onClick={() => setAssistLevelSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Bot} label="Nivel de asistencia de la IA">
+            <SettingsRow icon={Bot} label={t("settings.assistLevel")}>
               <span className="text-sm text-neutral-400">{assistLevel}</span>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
           <button type="button" onClick={() => setLanguageSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={Globe} label="Idioma de los resúmenes">
-              <span className="text-sm text-neutral-400">{selectedLanguage.label}</span>
+            <SettingsRow icon={Globe} label={t("settings.summaryLanguage")}>
+              <span className="text-sm text-neutral-400">{selectedLanguageLabel}</span>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
 
-        <SettingsGroup title="Soporte y cuenta">
+        <SettingsGroup title={t("settings.supportAccount")}>
           <button type="button" onClick={() => setEditProfileSheetOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={UserPen} label="Editar perfil">
+            <SettingsRow icon={UserPen} label={t("settings.editProfile")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
           <button type="button" onClick={() => setToastVisible(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={HelpCircle} label="Centro de ayuda">
+            <SettingsRow icon={HelpCircle} label={t("settings.helpCenter")}>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
           <button type="button" onClick={() => setLogoutModalOpen(true)} className={ROW_BASE + " text-left"}>
-            <SettingsRow icon={LogOut} label="Cerrar sesión" danger>
+            <SettingsRow icon={LogOut} label={t("settings.logout")} danger>
               <ChevronRight className="w-5 h-5 text-neutral-500 shrink-0" />
             </SettingsRow>
           </button>
         </SettingsGroup>
       </main>
 
-      {/* Bottom sheet: idioma de los resúmenes */}
-      {languageSheetOpen && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-            onClick={() => setLanguageSheetOpen(false)}
-            onKeyDown={(e) => e.key === "Escape" && setLanguageSheetOpen(false)}
-            role="button"
-            tabIndex={0}
-            aria-label="Cerrar"
-          />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-800 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom border-t border-neutral-700 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white">Idioma de los resúmenes</h2>
-              <button type="button" onClick={() => setLanguageSheetOpen(false)} className="p-2 rounded-lg hover:bg-neutral-700 text-neutral-400" aria-label="Cerrar">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <ul className="space-y-1">
-              {LANGUAGES.map((lang) => (
-                <li key={lang.id}>
-                  <button
-                    type="button"
-                    onClick={() => { setSummaryLanguageId(lang.id); setLanguageSheetOpen(false); }}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left transition-colors ${
-                      summaryLanguageId === lang.id ? "bg-brand-500/20 text-brand-400" : "hover:bg-neutral-700 text-neutral-200"
-                    }`}
-                  >
-                    <span className="text-sm font-medium">{lang.label}</span>
-                    {summaryLanguageId === lang.id && <span className="text-brand-400 text-xs">Seleccionado</span>}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </>
-      )}
+      <LanguageBottomSheet isOpen={languageSheetOpen} onClose={() => setLanguageSheetOpen(false)} />
 
       {/* Bottom Sheet: Formato de exportación */}
       <BottomSheet isOpen={exportSheetOpen} onClose={() => setExportSheetOpen(false)} title="Formato de exportación">

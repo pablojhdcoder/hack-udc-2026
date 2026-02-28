@@ -8,6 +8,7 @@ import InboxList from "./components/Inbox/InboxList";
 import FooterCapture from "./components/Inbox/FooterCapture";
 import ProcessScreen from "./components/Process/ProcessScreen";
 import VaultScreen from "./components/Vault/VaultScreen";
+import CalendarioView from "./components/Calendario/CalendarioView";
 import SettingsScreen from "./components/Settings/SettingsScreen";
 import { getInbox, addToInbox } from "./api/client";
 
@@ -174,6 +175,14 @@ export default function App() {
           initialFolder={vaultInitial.folder}
           initialItemId={vaultInitial.itemId}
         />
+      </MobileFrame>
+    );
+  }
+
+  if (currentView === "calendario") {
+    return (
+      <MobileFrame>
+        <CalendarioView onBack={() => setCurrentView("inbox")} />
       </MobileFrame>
     );
   }

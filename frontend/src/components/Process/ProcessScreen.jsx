@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   ArrowLeft,
+  CalendarPlus,
   Loader2,
   Link2,
   Mic,
@@ -383,6 +384,22 @@ export default function ProcessScreen({ onBack, onProcessDone, onOpenVault }) {
               </p>
             )}
           </div>
+
+          {currentItem?.detectedEvent && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 mb-4 flex items-start gap-3">
+              <CalendarPlus className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-blue-300 font-semibold uppercase tracking-wider mb-1">
+                  📅 Evento detectado
+                </p>
+                <p className="text-sm text-white font-medium">{currentItem.detectedEvent.title}</p>
+                <p className="text-xs text-neutral-400 mt-0.5">{currentItem.detectedEvent.date}</p>
+                <p className="text-[10px] text-neutral-500 mt-2">
+                  Se añadirá al calendario al Aprobar
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {getItemTopics(currentItem).map((topic) => (

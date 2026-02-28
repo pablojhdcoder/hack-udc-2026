@@ -38,6 +38,9 @@ function addMockToInbox(payload) {
         type: "text",
         content: rawInput.trim(),
         createdAt: new Date().toISOString(),
+        ...(/cita|dentista|reunión|evento/i.test(rawInput.trim())
+          ? { detectedEvent: { title: "Cita con el dentista", date: "Jueves 17, 17:00h" } }
+          : {}),
       };
   mockItems.push(item);
   return Promise.resolve(item);

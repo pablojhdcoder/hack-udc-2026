@@ -1,6 +1,8 @@
-import { X, Inbox, FolderOpen, Settings } from "lucide-react";
+import { X, Inbox, FolderOpen, Calendar, Settings } from "lucide-react";
+import { useAppLanguage } from "../../context/LanguageContext";
 
 export default function Sidebar({ isOpen, onClose, onNavigate }) {
+  const { t } = useAppLanguage();
   return (
     <>
       {/* Overlay: dentro del marco móvil, clic cierra el menú */}
@@ -25,7 +27,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
         aria-hidden={!isOpen}
       >
         <div className="flex items-center justify-between h-14 px-4 border-b border-zinc-200 shrink-0 dark:border-zinc-800">
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100">Digital Brain</span>
+          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{t("sidebar.appName")}</span>
           <button
             type="button"
             onClick={onClose}
@@ -42,7 +44,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
           >
             <Inbox className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
-            Fábrica de ideas
+            {t("sidebar.factory")}
           </button>
           <button
             type="button"
@@ -50,7 +52,15 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
           >
             <FolderOpen className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
-            Procesado
+            {t("sidebar.processed")}
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigate?.("calendario")}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200"
+          >
+            <Calendar className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
+            {t("sidebar.calendar")}
           </button>
           <button
             type="button"
@@ -58,7 +68,7 @@ export default function Sidebar({ isOpen, onClose, onNavigate }) {
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-800 dark:text-zinc-200 mt-4"
           >
             <Settings className="w-5 h-5 text-brand-500 dark:text-zinc-400" />
-            Ajustes
+            {t("sidebar.settings")}
           </button>
         </nav>
       </aside>
