@@ -284,16 +284,16 @@ export default function App() {
         />
 
         {isChatOpen && (
-          <div className="absolute inset-0 z-50 bg-neutral-950 flex flex-col">
-            <header className="shrink-0 flex justify-between items-center p-4 border-b border-neutral-800">
+          <div className="absolute inset-0 z-50 bg-white dark:bg-neutral-950 flex flex-col">
+            <header className="shrink-0 flex justify-between items-center p-4 border-b border-zinc-200 dark:border-neutral-800">
               <div className="flex items-center gap-2">
-                <Brain className="w-5 h-5 text-blue-400" />
-                <h2 className="text-lg font-semibold text-white">{t("chat.title")}</h2>
+                <Brain className="w-5 h-5 text-blue-500 dark:text-blue-400" />
+                <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">{t("chat.title")}</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setIsChatOpen(false)}
-                className="p-2 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors"
+                className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-500 dark:text-neutral-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
                 aria-label={t("chat.closeChat")}
               >
                 <X className="w-5 h-5" />
@@ -306,28 +306,28 @@ export default function App() {
                   className={
                     msg.role === "user"
                       ? "self-end bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%]"
-                      : "self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]"
+                      : "self-start bg-zinc-100 dark:bg-neutral-800 text-zinc-900 dark:text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]"
                   }
                 >
                   <p className="text-sm whitespace-pre-wrap break-words">{msg.content === "__greeting__" ? t("chat.greeting") : msg.content}</p>
                 </div>
               ))}
               {chatLoading && (
-                <div className="self-start bg-neutral-800 text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] flex items-center gap-2">
-                  <Loader2 className="w-4 h-4 text-blue-400 animate-spin shrink-0" />
-                  <p className="text-sm text-neutral-400">{t("chat.typing")}</p>
+                <div className="self-start bg-zinc-100 dark:bg-neutral-800 text-zinc-900 dark:text-white rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 text-blue-500 dark:text-blue-400 animate-spin shrink-0" />
+                  <p className="text-sm text-zinc-500 dark:text-neutral-400">{t("chat.typing")}</p>
                 </div>
               )}
             </div>
-            <footer className="shrink-0 p-3 bg-neutral-950 border-t border-neutral-800 flex items-center gap-2">
-              <div className="flex-1 flex items-center bg-neutral-900 border border-neutral-800 rounded-full px-4 py-2">
+            <footer className="shrink-0 p-3 bg-white dark:bg-neutral-950 border-t border-zinc-200 dark:border-neutral-800 flex items-center gap-2">
+              <div className="flex-1 flex items-center bg-zinc-100 dark:bg-neutral-900 border border-zinc-200 dark:border-neutral-800 rounded-full px-4 py-2">
                 <input
                   type="text"
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
                   placeholder={t("chat.placeholder")}
-                  className="w-full bg-transparent text-white outline-none placeholder-neutral-500 py-1 text-sm"
+                  className="w-full bg-transparent text-zinc-900 dark:text-white outline-none placeholder-zinc-400 dark:placeholder-neutral-500 py-1 text-sm"
                   aria-label={t("chat.messageLabel")}
                 />
               </div>

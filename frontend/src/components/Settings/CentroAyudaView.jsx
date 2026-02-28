@@ -34,7 +34,7 @@ export default function CentroAyudaView({ onBack, onContactEmail }) {
   };
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-neutral-950">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-950">
       <header className="shrink-0 flex items-center h-14 px-4 border-b border-neutral-800 safe-top">
         <button
           type="button"

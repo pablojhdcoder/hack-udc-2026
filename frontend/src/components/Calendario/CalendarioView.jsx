@@ -117,17 +117,17 @@ export default function CalendarioView({ onBack }) {
   };
 
   return (
-    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-neutral-950">
-      <header className="shrink-0 flex items-center h-14 px-4 border-b border-neutral-800 safe-top">
+    <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-950">
+      <header className="shrink-0 flex items-center h-14 px-4 border-b border-zinc-200 dark:border-neutral-800 safe-top">
         <button
           type="button"
           onClick={onBack}
-          className="p-2 -ml-2 rounded-lg hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors"
+          className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-neutral-800 text-zinc-600 dark:text-neutral-300 hover:text-zinc-900 dark:hover:text-white transition-colors"
           aria-label="Volver"
         >
           <ArrowLeft className="w-6 h-6" />
         </button>
-        <h1 className="flex-1 text-center text-lg font-semibold text-white">Calendario</h1>
+        <h1 className="flex-1 text-center text-lg font-semibold text-zinc-900 dark:text-white">Calendario</h1>
         <div className="w-10" />
       </header>
 
@@ -137,11 +137,11 @@ export default function CalendarioView({ onBack }) {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="rounded-xl bg-neutral-800/60 border border-neutral-800 p-4 animate-pulse"
+                className="rounded-xl bg-zinc-100 dark:bg-neutral-800/60 border border-zinc-200 dark:border-neutral-800 p-4 animate-pulse"
               >
-                <div className="h-4 bg-neutral-700 rounded w-1/3 mb-3" />
-                <div className="h-5 bg-neutral-700 rounded w-full mb-2" />
-                <div className="h-3 bg-neutral-700 rounded w-2/3" />
+                <div className="h-4 bg-zinc-200 dark:bg-neutral-700 rounded w-1/3 mb-3" />
+                <div className="h-5 bg-zinc-200 dark:bg-neutral-700 rounded w-full mb-2" />
+                <div className="h-3 bg-zinc-200 dark:bg-neutral-700 rounded w-2/3" />
               </div>
             ))}
           </div>
@@ -152,18 +152,18 @@ export default function CalendarioView({ onBack }) {
               <button
                 type="button"
                 onClick={prevMonth}
-                className="p-2 rounded-full hover:bg-neutral-800 text-blue-400 transition-colors"
+                className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 text-blue-500 dark:text-blue-400 transition-colors"
                 aria-label="Mes anterior"
               >
                 <ChevronLeft className="w-6 h-6" />
               </button>
-              <span className="text-lg font-semibold text-white">
+              <span className="text-lg font-semibold text-zinc-900 dark:text-white">
                 {MONTH_NAMES[month]} {year}
               </span>
               <button
                 type="button"
                 onClick={nextMonth}
-                className="p-2 rounded-full hover:bg-neutral-800 text-blue-400 transition-colors"
+                className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-neutral-800 text-blue-500 dark:text-blue-400 transition-colors"
                 aria-label="Mes siguiente"
               >
                 <ChevronRight className="w-6 h-6" />
@@ -175,7 +175,7 @@ export default function CalendarioView({ onBack }) {
               {WEEKDAYS.map((wd) => (
                 <div
                   key={wd}
-                  className="text-center text-xs font-medium text-neutral-500"
+                  className="text-center text-xs font-medium text-zinc-400 dark:text-neutral-500"
                 >
                   {wd}
                 </div>
@@ -202,8 +202,8 @@ export default function CalendarioView({ onBack }) {
                     className={`
                       flex flex-col items-center justify-center p-2 h-12 w-full cursor-pointer rounded-full transition-colors relative
                       ${isSelected ? "bg-blue-600 text-white" : ""}
-                      ${!isSelected && isToday ? "text-blue-400 font-bold" : ""}
-                      ${!isSelected && !isToday ? "text-white hover:bg-neutral-800" : ""}
+                      ${!isSelected && isToday ? "text-blue-500 dark:text-blue-400 font-bold" : ""}
+                      ${!isSelected && !isToday ? "text-zinc-800 dark:text-white hover:bg-zinc-100 dark:hover:bg-neutral-800" : ""}
                     `}
                   >
                     <span>{dayNum}</span>
@@ -219,15 +219,15 @@ export default function CalendarioView({ onBack }) {
             </div>
 
             {/* Lista de eventos del día seleccionado */}
-            <div className="border-t border-neutral-800 mt-6 pt-4">
+            <div className="border-t border-zinc-200 dark:border-neutral-800 mt-6 pt-4">
               <div className="flex items-center gap-2 mb-3">
-                <CalendarDays className="w-4 h-4 text-blue-400" />
-                <h2 className="text-sm font-medium text-neutral-400">
+                <CalendarDays className="w-4 h-4 text-blue-500 dark:text-blue-400" />
+                <h2 className="text-sm font-medium text-zinc-500 dark:text-neutral-400">
                   {selectedDate.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
                 </h2>
               </div>
               {eventsOnSelectedDay.length === 0 ? (
-                <p className="text-neutral-500 text-sm py-4">No hay eventos para este día.</p>
+                <p className="text-zinc-400 dark:text-neutral-500 text-sm py-4">No hay eventos para este día.</p>
               ) : (
                 <ul className="space-y-3">
                   {eventsOnSelectedDay
@@ -240,7 +240,7 @@ export default function CalendarioView({ onBack }) {
                     .map((event, index) => (
                     <li
                       key={event.id ?? index}
-                      className="rounded-xl bg-neutral-800/80 border border-neutral-700/50 p-4 flex flex-col gap-1.5 group"
+                      className="rounded-xl bg-zinc-50 dark:bg-neutral-800/80 border border-zinc-200 dark:border-neutral-700/50 p-4 flex flex-col gap-1.5 group"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
@@ -250,11 +250,11 @@ export default function CalendarioView({ onBack }) {
                               <span className="text-xs text-blue-400 font-medium tabular-nums">{event.time}</span>
                             </div>
                           )}
-                          <p className="text-sm text-white font-semibold leading-snug">
+                          <p className="text-sm text-zinc-900 dark:text-white font-semibold leading-snug">
                             {event.title ?? event.titulo ?? "Sin título"}
                           </p>
                           {(event.description ?? event.note ?? event.originalNote ?? event.sourceContent ?? event.nota) && (
-                            <p className="text-xs text-neutral-400 mt-1 leading-relaxed line-clamp-3">
+                            <p className="text-xs text-zinc-500 dark:text-neutral-400 mt-1 leading-relaxed line-clamp-3">
                               {event.description ?? event.note ?? event.originalNote ?? event.sourceContent ?? event.nota}
                             </p>
                           )}
@@ -269,7 +269,7 @@ export default function CalendarioView({ onBack }) {
                           type="button"
                           onClick={() => handleDeleteEvent(event.id)}
                           disabled={deletingId === event.id}
-                          className="p-1.5 rounded-lg text-neutral-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                          className="p-1.5 rounded-lg text-zinc-300 dark:text-neutral-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0 opacity-0 group-hover:opacity-100 disabled:opacity-50"
                           aria-label="Eliminar evento"
                         >
                           <Trash2 className="w-4 h-4" />

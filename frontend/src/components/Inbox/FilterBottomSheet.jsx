@@ -74,11 +74,11 @@ export default function FilterBottomSheet({
         aria-label={t("filters.closeAria")}
       />
       <div
-        className="fixed bottom-0 left-0 right-0 z-50 bg-neutral-950 border-t border-neutral-800 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom max-h-[85vh] overflow-y-auto scrollbar-hide"
+        className="fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-neutral-950 border-t border-zinc-200 dark:border-neutral-800 rounded-t-2xl max-w-[430px] mx-auto safe-bottom animate-slide-in-bottom max-h-[85vh] overflow-y-auto scrollbar-hide"
         aria-modal="true"
         aria-label={t("filters.filterOptionsAria")}
       >
-        <div className="flex items-center justify-between px-4 pt-4 pb-2 sticky top-0 bg-neutral-950 z-10">
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 sticky top-0 bg-white dark:bg-neutral-950 z-10">
           <h2 className="text-lg font-semibold text-white">{t("filters.title")}</h2>
           <button
             type="button"

@@ -235,9 +235,9 @@ export default function FileSearchList({ title = "El baúl de las ideas" }) {
   const hasResults = items.length > 0;
 
   return (
-    <div className="h-full min-h-0 flex flex-col bg-neutral-950 text-zinc-50">
+    <div className="h-full min-h-0 flex flex-col bg-white dark:bg-neutral-950 text-zinc-900 dark:text-zinc-50">
       {/* Header con título / buscador */}
-      <header className="shrink-0 flex items-center h-14 px-4 border-b border-neutral-800 bg-neutral-950">
+      <header className="shrink-0 flex items-center h-14 px-4 border-b border-zinc-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
         {isSearchOpen ? (
           <div className="flex items-center gap-2 w-full">
             <button

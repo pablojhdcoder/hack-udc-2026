@@ -6,7 +6,7 @@
 export default function MobileFrame({ children, className = "" }) {
   return (
     <div
-      className={`w-full h-[100dvh] max-w-md mx-auto bg-[#0a0a0a] overflow-hidden flex flex-col relative ${className}`}
+      className={`w-full h-[100dvh] max-w-md mx-auto bg-white dark:bg-[#0a0a0a] overflow-hidden flex flex-col relative ${className}`}
     >
       {children}
     </div>
