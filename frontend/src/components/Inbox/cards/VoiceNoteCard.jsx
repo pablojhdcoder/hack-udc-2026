@@ -121,6 +121,11 @@ export default function VoiceNoteCard({ item, embedded }) {
             ))}
           </div>
         )}
+        {item.transcription && (
+          <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-2 leading-relaxed line-clamp-3" title={item.transcription}>
+            {item.transcription}
+          </p>
+        )}
         <p className="text-zinc-500 text-xs mt-1">{formatDate(item.createdAt)}</p>
       </div>
       {audioUrl && (

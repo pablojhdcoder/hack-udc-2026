@@ -212,6 +212,7 @@ export const translations = {
       removedFavorite: "Eliminado de favoritos",
       untitled: "Sin título",
       noSummary: "—",
+      transcription: "Transcripción",
       kindLabels: {
         note: "Notas",
         link: "Enlaces",
@@ -463,6 +464,7 @@ export const translations = {
       removedFavorite: "Removed from favorites",
       untitled: "Untitled",
       noSummary: "—",
+      transcription: "Transcription",
       kindLabels: {
         note: "Notes",
         link: "Links",
@@ -696,6 +698,7 @@ export const translations = {
       removedFavorite: "Retiré des favoris",
       untitled: "Sans titre",
       noSummary: "—",
+      transcription: "Transcription",
       kindLabels: {
         note: "Notes",
         link: "Liens",
@@ -929,6 +932,7 @@ export const translations = {
       removedFavorite: "Removido dos favoritos",
       untitled: "Sem título",
       noSummary: "—",
+      transcription: "Transcrição",
       kindLabels: {
         note: "Notas",
         link: "Links",
@@ -1162,6 +1166,7 @@ export const translations = {
       removedFavorite: "Rimosso dai preferiti",
       untitled: "Senza titolo",
       noSummary: "—",
+      transcription: "Trascrizione",
       kindLabels: {
         note: "Note",
         link: "Link",
@@ -1395,6 +1400,7 @@ export const translations = {
       removedFavorite: "Aus Favoriten entfernt",
       untitled: "Ohne Titel",
       noSummary: "—",
+      transcription: "Transkription",
       kindLabels: {
         note: "Notizen",
         link: "Links",

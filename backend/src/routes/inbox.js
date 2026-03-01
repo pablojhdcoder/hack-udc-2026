@@ -776,7 +776,7 @@ router.get("/processed/recent", async (req, res) => {
       ...links.map((item) => ({ kind: "link", id: item.id, title: toItemTitle(item, "link"), filename: item.title || item.url?.slice(0, 50) || "Enlace", url: item.url, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
-      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: item.filename || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, durationSeconds: item.duration ?? 0, ...normalizeAIEnrichment(item.aiEnrichment) })),
+      ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: item.filename || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, durationSeconds: item.duration ?? 0, transcription: item.transcription ?? null, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...videos.map((item) => { const thumbFile = `thumb_${item.id}.jpg`; const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile)); return { kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, thumbnailUrl: thumbExists ? `/api/uploads/${thumbFile}` : null, ...normalizeAIEnrichment(item.aiEnrichment) }; }),
     ]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -835,7 +835,7 @@ router.get("/by-kind/:kind", async (req, res) => {
       }
       if (kind === "link") return { ...base, url: item.url, type: item.type };
       if (kind === "note") return { ...base, content: (item.content || "").slice(0, 200), filename: (item.content || "").slice(0, 80) || "Nota", type: item.type };
-      if (kind === "audio") return { ...base, filename: item.filename || ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0 };
+      if (kind === "audio") return { ...base, filename: item.filename || ai.aiTitle || path.basename(item.filePath || "") || "Audio", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0, transcription: item.transcription ?? null };
       if (kind === "video") {
         const thumbFile = `thumb_${item.id}.jpg`;
         const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile));

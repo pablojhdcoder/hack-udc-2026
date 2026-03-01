@@ -17,7 +17,7 @@
  */
 
 import { readFile } from "fs/promises";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, createReadStream as fsCreateReadStream } from "fs";
 import { resolve } from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
@@ -31,12 +31,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Timeout en ms para Azure antes de activar el fallback a Gemini
 const AZURE_TIMEOUT_MS = 15_000;
 
-// Límite para usar inline base64 en audio (20 MB). Encima se usa File API.
-const AUDIO_INLINE_MAX_BYTES = 20 * 1024 * 1024;
-
 // ─── Lazy singletons ────────────────────────────────────────────────────────
 
 let _azureClient = undefined;
+let _azureWhisperClient = undefined;
 let _geminiModel = undefined;
 let _geminiFileManager = undefined;
 
@@ -63,6 +61,68 @@ function getAzureClient() {
 
   console.log("[AI] Azure OpenAI client inicializado (deployment:", deployment, ")");
   return _azureClient;
+}
+
+/**
+ * Cliente para transcripción de audio con Whisper.
+ *
+ * Prioridad:
+ *   1. Azure Whisper: requiere AZURE_WHISPER_DEPLOYMENT configurado explícitamente
+ *      (y AZURE_WHISPER_ENDPOINT / AZURE_WHISPER_API_KEY opcionales).
+ *   2. OpenAI estándar: si OPENAI_API_KEY está configurado (usa api.openai.com).
+ *
+ * Si ninguno está disponible devuelve null (sin transcripción).
+ */
+function getAzureWhisperClient() {
+  if (_azureWhisperClient !== undefined) return _azureWhisperClient;
+
+  // ── Opción 1: Azure Whisper (sólo si hay deployment explícito) ──
+  const azureDeployment = process.env.AZURE_WHISPER_DEPLOYMENT || process.env.AZURE_OPENAI_WHISPER_DEPLOYMENT || "";
+  if (azureDeployment) {
+    const endpoint = (
+      process.env.AZURE_WHISPER_ENDPOINT ||
+      process.env.AZURE_OPENAI_ENDPOINT ||
+      ""
+    ).replace(/\/$/, "");
+    const apiKey =
+      process.env.AZURE_WHISPER_API_KEY ||
+      process.env.AZURE_OPENAI_API_KEY ||
+      "";
+    const apiVersion =
+      process.env.AZURE_WHISPER_API_VERSION ||
+      process.env.AZURE_OPENAI_API_VERSION ||
+      "2024-06-01";
+
+    if (endpoint && apiKey) {
+      _azureWhisperClient = {
+        client: new OpenAI({
+          apiKey,
+          baseURL: `${endpoint}/openai/deployments/${azureDeployment}`,
+          defaultQuery: { "api-version": apiVersion },
+          defaultHeaders: { "api-key": apiKey },
+        }),
+        deployment: azureDeployment,
+        isAzure: true,
+      };
+      console.log("[AI] Azure Whisper client inicializado (deployment:", azureDeployment, ")");
+      return _azureWhisperClient;
+    }
+  }
+
+  // ── Opción 2: OpenAI estándar ──
+  const openaiKey = process.env.OPENAI_API_KEY ?? "";
+  if (openaiKey) {
+    _azureWhisperClient = {
+      client: new OpenAI({ apiKey: openaiKey }),
+      deployment: "whisper-1",
+      isAzure: false,
+    };
+    console.log("[AI] OpenAI Whisper client inicializado");
+    return _azureWhisperClient;
+  }
+
+  _azureWhisperClient = null;
+  return null;
 }
 
 function getGeminiModel() {
@@ -379,15 +439,6 @@ const JSON_SCHEMA = `{
   "category": "categoría amplia y descriptiva"
 }`;
 
-const AUDIO_JSON_SCHEMA = `{
-  "transcription": "texto transcrito completo",
-  "title": "título representativo (máx 30 caracteres)",
-  "summary": "resumen breve en 2-3 frases",
-  "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
-  "language": "es|en|...",
-  "category": "categoría amplia y descriptiva"
-}`;
-
 function buildUserPrompt(instruction) {
   return `${instruction}
 
@@ -608,9 +659,10 @@ Tipo: "${type}"`;
 // Enriquecer AUDIO
 //
 // Estrategia:
-//   1. Si el fichero es pequeño (< 20 MB): inline base64 directo a Gemini (más rápido).
-//   2. Si es grande o falla el inline: Gemini File API (subida + análisis).
-//   3. Si todo falla: devuelve enriquecimiento con error para no bloquear el flujo.
+//   1. Azure Whisper → transcripción del audio.
+//   2. Azure chat completion → title/summary/topics/category a partir de la transcripción.
+//   3. Si Azure Whisper no está disponible o falla → devuelve metadatos inferidos por nombre.
+//   (Se elimina la dependencia de Gemini para audio, que causaba errores 429.)
 // ──────────────────────────────────────────────
 
 const AUDIO_MIME_MAP = {
@@ -624,9 +676,33 @@ const AUDIO_MIME_MAP = {
   aac: "audio/aac",
 };
 
-const AUDIO_PROMPT_SUFFIX = `\n\nTranscribe el audio adjunto y analiza su contenido.
-Devuelve un JSON con la siguiente estructura exacta:
-${AUDIO_JSON_SCHEMA}`;
+/**
+ * Transcribe un fichero de audio usando Azure OpenAI Whisper.
+ * Devuelve el texto transcrito o null si falla / no está disponible.
+ */
+async function transcribeWithAzureWhisper(absolutePath, filename) {
+  const whisper = getAzureWhisperClient();
+  if (!whisper) return null;
+
+  try {
+    const { createReadStream } = await import("fs");
+    const fileStream = createReadStream(absolutePath);
+    // El cliente ya tiene el baseURL apuntando al deployment de Whisper,
+    // por lo que usamos model="" (Azure ignora el campo model en el path).
+    const response = await whisper.client.audio.transcriptions.create({
+      model: whisper.deployment,
+      file: fileStream,
+      response_format: "text",
+    });
+    // La respuesta puede ser string directamente o { text: "..." }
+    const transcription =
+      typeof response === "string" ? response : response?.text ?? null;
+    return transcription?.trim() || null;
+  } catch (err) {
+    console.warn(`[AI] Azure Whisper transcripción falló (${err.message})`);
+    return null;
+  }
+}
 
 export async function enrichAudio(filePath, type) {
   const absolutePath = resolveAbsolutePath(filePath);
@@ -635,53 +711,57 @@ export async function enrichAudio(filePath, type) {
     return withTimestamp({ error: "Fichero de audio no encontrado", transcription: null });
   }
 
-  const ext = (type || "").toLowerCase().replace(".", "") || absolutePath.split(".").pop()?.toLowerCase();
-  const mimeType = AUDIO_MIME_MAP[ext] || "audio/mpeg";
   const filename = absolutePath.split(/[\\/]/).pop() ?? "audio";
 
-  // ── Intento 1: inline base64 (para ficheros pequeños / notas de voz) ──
-  let fileSize = 0;
+  // ── Paso 1: Transcripción con Azure Whisper ──
+  let transcription = null;
   try {
-    fileSize = statSync(absolutePath).size;
-  } catch {
-    return withTimestamp({ error: "No se pudo leer el fichero de audio", transcription: null });
-  }
-
-  if (fileSize <= AUDIO_INLINE_MAX_BYTES) {
-    try {
-      const buffer = await readFile(absolutePath);
-      const base64 = buffer.toString("base64");
-      const prompt = `${SYSTEM_PROMPT}${AUDIO_PROMPT_SUFFIX}`;
-      const parts = [
-        { text: prompt },
-        { inlineData: { mimeType, data: base64 } },
-      ];
-      const result = await geminiGenerateContent(parts, 2048);
-      console.log(`[AI] Audio '${filename}' transcrito/analizado (inline).`);
-      return withTimestamp({ ...result, transcription: result.transcription ?? null });
-    } catch (err) {
-      console.warn(`[AI] Audio inline falló (${err.message}), probando File API...`);
+    transcription = await transcribeWithAzureWhisper(absolutePath, filename);
+    if (transcription) {
+      console.log(`[AI] Audio '${filename}' transcrito con Azure Whisper.`);
+    } else {
+      console.log(`[AI] Azure Whisper no disponible o sin resultado para '${filename}'.`);
     }
-  } else {
-    console.log(`[AI] Audio '${filename}' es grande (${Math.round(fileSize / 1024 / 1024)} MB), usando File API...`);
+  } catch (err) {
+    console.warn(`[AI] Error inesperado en Azure Whisper: ${err.message}`);
   }
 
-  // ── Intento 2: Gemini File API ──
-  if (getGeminiFileManager()) {
-    try {
-      const prompt = `${SYSTEM_PROMPT}${AUDIO_PROMPT_SUFFIX}`;
-      const data = await geminiFileAPIGenerateContent(absolutePath, filename, prompt, 2048);
-      console.log(`[AI] Audio '${filename}' transcrito/analizado (File API).`);
-      return withTimestamp({ ...data, transcription: data.transcription ?? null });
-    } catch (err) {
-      console.warn(`[AI] Audio File API también falló: ${err.message}`);
-    }
+  // ── Paso 2: Metadatos (title/summary/topics/category) vía Azure chat ──
+  const baseInstruction = transcription
+    ? `Analiza el siguiente texto, que es la transcripción de un archivo de audio llamado "${filename}".
+
+TRANSCRIPCIÓN:
+"""
+${transcription.slice(0, 4000)}
+"""`
+    : `Infiere metadatos de un archivo de audio basándote únicamente en su nombre y tipo.
+
+Nombre: "${filename}"
+Tipo: "${(type || "").toLowerCase()}"`;
+
+  const azureFn = () =>
+    azureGenerateContent(
+      [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: buildUserPrompt(baseInstruction) },
+      ],
+      512
+    );
+
+  const geminiFn = () =>
+    geminiGenerateContent(
+      [{ text: `${SYSTEM_PROMPT}\n\n${buildUserPrompt(baseInstruction)}` }],
+      512
+    );
+
+  let metadata = {};
+  try {
+    metadata = await enrichWithFallback(azureFn, geminiFn);
+  } catch (err) {
+    console.warn(`[AI] No se pudieron obtener metadatos para audio '${filename}': ${err.message}`);
   }
 
-  return withTimestamp({
-    transcription: null,
-    error: "No se pudo transcribir/analizar el audio (inline y File API fallaron)",
-  });
+  return withTimestamp({ ...metadata, transcription: transcription ?? null });
 }
 
 // ──────────────────────────────────────────────

@@ -665,6 +665,18 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
                 )}
               </div>
 
+              {/* Transcripción (solo audio) */}
+              {currentItem?.kind === "audio" && currentItem?.transcription && (
+                <div className="mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+                  <p className="text-xs text-amber-500 dark:text-amber-400 font-semibold uppercase tracking-wider mb-1.5">
+                    🎙 Transcripción
+                  </p>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+                    {currentItem.transcription}
+                  </p>
+                </div>
+              )}
+
               {currentItem?.detectedEvent && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3 mb-4 flex items-start gap-3">
               <CalendarPlus className="w-5 h-5 text-blue-400 mt-0.5 shrink-0" aria-hidden />
