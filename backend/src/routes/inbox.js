@@ -762,6 +762,7 @@ router.get("/processed/recent", async (req, res) => {
     const normalizeAIEnrichment = (raw) => {
       const ai = parseAI(raw);
       const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+      const suggestedTasks = Array.isArray(ai?.suggestedTasks) ? ai.suggestedTasks : [];
       return {
         aiTitle:    ai?.title    ?? null,
         aiSummary:  ai?.summary  ?? null,
@@ -769,6 +770,7 @@ router.get("/processed/recent", async (req, res) => {
         aiCategory: ai?.category ?? null,
         aiTopics:   topics,
         aiTags:     topics,
+        suggestedTasks,
       };
     };
     const unified = [

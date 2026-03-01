@@ -92,6 +92,17 @@ function getItemTopics(item) {
   return [];
 }
 
+/** Tareas / siguientes pasos (suggestedTasks) del enriquecimiento. */
+function getSuggestedTasks(item) {
+  if (Array.isArray(item?.suggestedTasks) && item.suggestedTasks.length > 0) return item.suggestedTasks;
+  if (!item?.aiEnrichment) return [];
+  try {
+    const data = typeof item.aiEnrichment === "string" ? JSON.parse(item.aiEnrichment) : item.aiEnrichment;
+    if (Array.isArray(data?.suggestedTasks)) return data.suggestedTasks.filter((t) => t != null && String(t).trim());
+  } catch {}
+  return [];
+}
+
 function getRawPreview(item, t) {
   if (item.content) return item.content;
   if (item.url) return item.title ? `${item.title}\n${item.url}` : item.url;
@@ -664,6 +675,33 @@ export default function ProcessScreen({ initialItems, onBack, onProcessDone, onO
                   </p>
                 )}
               </div>
+
+              {/* Tareas detectadas */}
+              {(() => {
+                const suggestedTasks = getSuggestedTasks(currentItem);
+                if (suggestedTasks.length === 0) return null;
+                return (
+                  <>
+                    <div className="border-t border-neutral-800 my-3" />
+                    <p className="text-xs font-semibold text-blue-400 mb-2 uppercase">
+                      🎯 {t("processing.suggestedTasksTitle")}
+                    </p>
+                    {suggestedTasks.map((task, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-start gap-3 mt-2 bg-neutral-900/50 p-2 rounded-lg border border-neutral-800/50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="mt-1 accent-blue-500 w-4 h-4 cursor-pointer flex-shrink-0"
+                          aria-label={task}
+                        />
+                        <span className="text-sm text-neutral-300">{task}</span>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
 
               {/* Transcripción (solo audio) */}
               {currentItem?.kind === "audio" && currentItem?.transcription && (
