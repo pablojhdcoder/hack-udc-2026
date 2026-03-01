@@ -195,6 +195,7 @@ export default function App() {
       setCurrentView("procesando");
     } catch (error) {
       console.error("Hubo un error procesando la nota:", error);
+      setError(error?.message ?? "Error al procesar. Intenta de nuevo.");
     } finally {
       setLoadingProcessData(false);
     }
