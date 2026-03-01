@@ -965,6 +965,85 @@ router.delete("/favorites/:id", async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
+// GET /api/inbox/related/:kind/:id — Ítems conectados por temática (topics, categoría)
+// ──────────────────────────────────────────────
+
+router.get("/related/:kind/:id", async (req, res) => {
+  const { kind, id } = req.params;
+  const modelMap = { link: prisma.link, note: prisma.note, file: prisma.file, photo: prisma.photo, audio: prisma.audio, video: prisma.video };
+  const model = modelMap[kind];
+  if (!model) return res.status(400).json({ error: "kind inválido" });
+
+  try {
+    const item = await model.findUnique({ where: { id } });
+    if (!item) return res.status(404).json({ error: "No encontrado" });
+
+    const ai = parseAI(item.aiEnrichment);
+    const myTopics = Array.isArray(ai?.topics) ? ai.topics.map((t) => String(t).toLowerCase().trim()) : [];
+    const myCategory = ai?.category ? String(ai.category).toLowerCase().trim() : null;
+    if (myTopics.length === 0 && !myCategory) return res.json([]);
+
+    const limitPerKind = 40;
+    const [notes, links, files, photos, audios, videos] = await Promise.all([
+      prisma.note.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: limitPerKind }),
+      prisma.link.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: limitPerKind }),
+      prisma.file.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: limitPerKind }),
+      prisma.photo.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: limitPerKind }),
+      prisma.audio.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: limitPerKind }),
+      prisma.video.findMany({ where: { inboxStatus: "processed" }, orderBy: { createdAt: "desc" }, take: limitPerKind }),
+    ]);
+
+    const normalizeAIEnrichment = (raw) => {
+      const a = parseAI(raw);
+      const topics = Array.isArray(a?.topics) ? a.topics : [];
+      return { aiTitle: a?.title ?? null, aiSummary: a?.summary ?? null, aiCategory: a?.category ?? null, aiTopics: topics };
+    };
+
+    const toItem = (entity, k) => {
+      const ai = normalizeAIEnrichment(entity.aiEnrichment);
+      const base = { kind: k, id: entity.id, title: toItemTitle(entity, k), createdAt: entity.createdAt, ...ai };
+      if (k === "note") return { ...base, content: (entity.content || "").slice(0, 200), filename: (entity.content || "").slice(0, 80) || "Nota" };
+      if (k === "link") return { ...base, url: entity.url, filename: entity.title || entity.url?.slice(0, 50) || "Enlace" };
+      if (k === "file" || k === "photo") return { ...base, filename: entity.filename, filePath: entity.filePath };
+      if (k === "audio") return { ...base, filename: entity.filename || ai.aiTitle || path.basename(entity.filePath || "") || "Audio", filePath: entity.filePath };
+      if (k === "video") {
+        const thumbFile = `thumb_${entity.id}.jpg`;
+        const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile));
+        return { ...base, filename: entity.title || ai.aiTitle || path.basename(entity.filePath || "") || "Vídeo", filePath: entity.filePath, thumbnailUrl: thumbExists ? `/api/uploads/${thumbFile}` : null };
+      }
+      return base;
+    };
+
+    const candidates = [
+      ...notes.map((n) => toItem(n, "note")),
+      ...links.map((l) => toItem(l, "link")),
+      ...files.map((f) => toItem(f, "file")),
+      ...photos.map((p) => toItem(p, "photo")),
+      ...audios.map((a) => toItem(a, "audio")),
+      ...videos.map((v) => toItem(v, "video")),
+    ].filter((c) => !(c.kind === kind && c.id === id));
+
+    const score = (c) => {
+      let s = 0;
+      const theirTopics = (c.aiTopics ?? []).map((t) => String(t).toLowerCase().trim());
+      for (const t of myTopics) {
+        if (theirTopics.some((tt) => tt === t || tt.includes(t) || t.includes(tt))) s += 3;
+      }
+      const theirCat = c.aiCategory ? String(c.aiCategory).toLowerCase().trim() : null;
+      if (myCategory && theirCat && (theirCat === myCategory || theirCat.includes(myCategory) || myCategory.includes(theirCat))) s += 2;
+      return s;
+    };
+
+    const withScore = candidates.map((c) => ({ item: c, score: score(c) })).filter((x) => x.score > 0);
+    withScore.sort((a, b) => b.score - a.score);
+    const related = withScore.slice(0, 15).map((x) => x.item);
+    res.json(related);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ──────────────────────────────────────────────
 // GET /api/inbox — Listar entradas pendientes unificado
 // ──────────────────────────────────────────────
 

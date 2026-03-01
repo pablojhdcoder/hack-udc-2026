@@ -18,9 +18,8 @@
 
 import { readFile } from "fs/promises";
 import { existsSync, statSync, createReadStream as fsCreateReadStream } from "fs";
-import { resolve } from "path";
+import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
-import { dirname } from "path";
 import { extractFileContent } from "./fileExtractService.js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GoogleAIFileManager } from "@google/generative-ai/server";
@@ -423,9 +422,7 @@ async function enrichWithFallback(azureFn, geminiFn) {
 
 const SYSTEM_PROMPT = `Eres un asistente experto en análisis y clasificación de contenido digital para un "Second Brain" personal.
 Tu tarea es extraer metadatos mínimos y estructurados del contenido que se te proporciona.
-Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.
-
-REGLA ESTRICTA PARA LISTAS Y TAREAS: Si el texto tiene varias líneas (separadas por salto de línea), es una lista. Debes extraer CADA línea como un elemento del array "suggestedTasks". No ignores ninguna línea. El título y el resumen deben abarcar todas las tareas, no solo la primera.`;
+Responde SIEMPRE con un objeto JSON válido, sin texto adicional fuera del JSON.`;
 
 const TOPICS_INSTRUCTION = `IMPORTANTE - Campo "topics": incluye entre 3 y 5 palabras clave ESPECÍFICAS del contenido.
 Cada topic debe representar un aspecto distinto (temática, tecnología, contexto, disciplina, etc.).
@@ -438,18 +435,13 @@ const JSON_SCHEMA = `{
   "summary": "resumen breve del contenido en 2-3 frases, en el mismo idioma que el contenido",
   "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
   "language": "es|en|...",
-  "category": "categoría amplia y descriptiva",
-  "suggestedTasks": ["tarea 1", "tarea 2"]
+  "category": "categoría amplia y descriptiva"
 }`;
-
-const SUGGESTED_TASKS_INSTRUCTION = `Campo "suggestedTasks": array de strings. Si el contenido es una lista (varias líneas), extrae UNA tarea por cada línea. Si hay listas de compra, recados o acciones futuras, incluye cada ítem. Si no hay tareas ni listas, devuelve [].`;
 
 function buildUserPrompt(instruction) {
   return `${instruction}
 
 ${TOPICS_INSTRUCTION}
-
-${SUGGESTED_TASKS_INSTRUCTION}
 
 Devuelve un JSON con la siguiente estructura exacta:
 ${JSON_SCHEMA}`;
@@ -519,8 +511,10 @@ ${previewContext}${markdownContext}`;
 
 export async function enrichFile(filePath, type, filename) {
   const absolutePath = resolveAbsolutePath(filePath);
+  const ext = extname(absolutePath).toLowerCase().replace(/^\./, "");
+  const effectiveType = !type || type === "unknown" || type === "file" ? ext || type : type;
 
-  const extracted = await extractFileContent(absolutePath, type);
+  const extracted = await extractFileContent(absolutePath, effectiveType);
 
   const VISION_MIMES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
   if (extracted.base64 && extracted.mimeType && VISION_MIMES.includes(extracted.mimeType)) {
@@ -535,11 +529,15 @@ export async function enrichFile(filePath, type, filename) {
 }
 
 async function enrichTextContent(text, type, filename, pageCount) {
-  const instruction = `Analiza el siguiente contenido de un fichero (tipo: ${type}, nombre: "${filename}"${pageCount ? `, ${pageCount} páginas` : ""}) y extrae metadatos estructurados.
+  const isPdf = type === "pdf";
+  const charLimit = isPdf ? 10000 : 6000;
+  const instruction = `Analiza el siguiente contenido EXTRAÍDO del interior del documento (tipo: ${type}, nombre del fichero: "${filename}"${pageCount ? `, ${pageCount} páginas` : ""}) y extrae metadatos estructurados.
 
-CONTENIDO:
+IMPORTANTE: El "title" debe reflejar el TEMA o asunto del contenido (ej. "Sistemas operativos - Procesos"), no el nombre del archivo. El "summary" debe describir ÚNICAMENTE las ideas, temas y conclusiones del texto. NO describas el formato del archivo (evita frases como "documento PDF", "archivo titulado...", "posiblemente relacionado con...").
+
+CONTENIDO DEL DOCUMENTO:
 """
-${text.slice(0, 6000)}
+${text.slice(0, charLimit)}
 """`;
 
   const azureFn = () =>
@@ -584,10 +582,12 @@ async function enrichImageWithVision(base64, mimeType, filename) {
 }
 
 async function enrichFileByMetadata(filename, type) {
-  const instruction = `Infiere metadatos de un fichero basándote únicamente en su nombre y tipo.
+  const instruction = `Solo tienes el nombre y tipo del archivo (no se pudo extraer el contenido del interior).
 
 Nombre: "${filename}"
-Tipo: "${type}"`;
+Tipo: "${type}"
+
+Genera un "title" corto a partir del nombre del fichero. En "summary" escribe UNA frase indicando que el contenido no pudo extraerse automáticamente y que se puede abrir el archivo para revisarlo. NO inventes temas, temas de curso ni descripciones del contenido. Topics y category deben ser genéricos (ej. "documento", "archivo").`;
 
   const azureFn = () =>
     azureGenerateContent(

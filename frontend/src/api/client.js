@@ -237,6 +237,18 @@ export async function getInboxItem(kind, id) {
 }
 
 /**
+ * Ítems conectados por temática (topics, categoría) al ítem dado.
+ * @param {string} kind - note | link | file | photo | audio | video
+ * @param {string} id
+ * @returns {Promise<Array<{ kind, id, title, filename?, filePath?, url?, ... }>>}
+ */
+export async function getRelatedItems(kind, id) {
+  const res = await fetch(`${API_BASE}/inbox/related/${encodeURIComponent(kind)}/${encodeURIComponent(id)}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
  * Lista de favoritos (carpeta Favoritos).
  * @returns {Promise<Array<{ kind: "favorite", id, sourceKind, sourceId, title, filename?, url?, type, createdAt }>>}
  */

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X, Tag, FolderOpen, Globe, Calendar } from "lucide-react";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X, Tag, FolderOpen, Globe, Calendar, Network } from "lucide-react";
 import FilePreview from "../shared/FilePreview";
 import { useAppLanguage } from "../../context/LanguageContext";
 import { translations } from "../../i18n/translations";
@@ -12,6 +12,7 @@ import {
   getInboxByKind,
   getFavorites,
   getInboxItem,
+  getRelatedItems,
   discardItem,
   checkFavorite,
   addToFavorites,
@@ -156,6 +157,9 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState(new Set());
+  const [relatedItems, setRelatedItems] = useState([]);
+  const [relatedOpen, setRelatedOpen] = useState(true);
+  const [loadingRelated, setLoadingRelated] = useState(false);
   const searchInputRef = useRef(null);
   const lastOpenedKeyRef = useRef(null);
   const initialAppliedRef = useRef(false);
@@ -302,6 +306,24 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
     });
     return () => { cancelled = true; };
   }, [selectedItem]);
+
+  const relatedKind = selectedItem?.kind === "favorite" ? selectedItem?.sourceKind : selectedItem?.kind;
+  const relatedId = selectedItem?.kind === "favorite" ? selectedItem?.sourceId : selectedItem?.id;
+  useEffect(() => {
+    if (!selectedItem || !relatedKind || !relatedId) {
+      setRelatedItems([]);
+      setLoadingRelated(false);
+      return;
+    }
+    setLoadingRelated(true);
+    setRelatedItems([]);
+    let cancelled = false;
+    getRelatedItems(relatedKind, relatedId)
+      .then((list) => { if (!cancelled) setRelatedItems(Array.isArray(list) ? list : []); })
+      .catch(() => { if (!cancelled) setRelatedItems([]); })
+      .finally(() => { if (!cancelled) setLoadingRelated(false); });
+    return () => { cancelled = true; };
+  }, [selectedItem, relatedKind, relatedId]);
 
   const isNoteItem = selectedItem?.kind === "note" || selectedItem?.sourceKind === "note";
   useEffect(() => {
@@ -935,6 +957,49 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                         ? new Date(selectedItem.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
                         : vt.noSummary}
                     </span>
+                  </div>
+
+                  {/* Conectado con (por temática) */}
+                  <div className="border-t border-zinc-200 dark:border-neutral-700/50 pt-3 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setRelatedOpen((o) => !o)}
+                      className="flex items-center gap-2 w-full text-left text-xs font-medium text-zinc-500 dark:text-neutral-400 hover:text-zinc-700 dark:hover:text-neutral-300"
+                    >
+                      <Network className="w-4 h-4 shrink-0" />
+                      <span>{vt.relatedLabel ?? "Conectado con"}</span>
+                      <ChevronRight className={`w-4 h-4 ml-auto transition-transform ${relatedOpen ? "rotate-90" : ""}`} />
+                    </button>
+                    {relatedOpen && (
+                      <div className="mt-2 space-y-1 max-h-44 overflow-y-auto scrollbar-hide">
+                        {loadingRelated ? (
+                          <div className="flex items-center justify-center py-4">
+                            <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />
+                          </div>
+                        ) : relatedItems.length === 0 ? (
+                          <p className="text-xs text-zinc-400 dark:text-neutral-500 py-2">{vt.relatedEmpty ?? "Nada relacionado por ahora"}</p>
+                        ) : (
+                          relatedItems.map((rel) => {
+                            const title = getItemDisplayTitle(rel);
+                            const Icon = ICON_BY_KIND[rel.kind] ?? FileText;
+                            return (
+                              <button
+                                key={`${rel.kind}-${rel.id}`}
+                                type="button"
+                                onClick={() => setSelectedItem(rel)}
+                                className="w-full flex items-center gap-2 p-2.5 rounded-xl bg-zinc-100 dark:bg-neutral-800/80 hover:bg-zinc-200 dark:hover:bg-neutral-700/80 text-left transition-colors"
+                              >
+                                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-white dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 flex items-center justify-center">
+                                  <Icon className="w-4 h-4 text-zinc-500 dark:text-neutral-400" />
+                                </div>
+                                <span className="text-sm text-zinc-800 dark:text-neutral-200 truncate flex-1">{title}</span>
+                                <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

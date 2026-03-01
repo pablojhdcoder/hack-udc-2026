@@ -214,6 +214,8 @@ export const translations = {
       untitled: "Sin título",
       noSummary: "—",
       transcription: "Transcripción",
+      relatedLabel: "Conectado con",
+      relatedEmpty: "Nada relacionado por ahora",
       kindLabels: {
         note: "Notas",
         link: "Enlaces",
@@ -467,6 +469,8 @@ export const translations = {
       untitled: "Untitled",
       noSummary: "—",
       transcription: "Transcription",
+      relatedLabel: "Connected with",
+      relatedEmpty: "Nothing related yet",
       kindLabels: {
         note: "Notes",
         link: "Links",
