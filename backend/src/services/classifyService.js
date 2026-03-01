@@ -161,35 +161,55 @@ function getExtensionFromFilename(name) {
 // Análisis de contenido de ficheros de texto plano
 // ──────────────────────────────────────────────
 
-// Captura la URL limpia (sin puntuación de cierre al final)
-const YOUTUBE_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]{11}[^\s<>"')\].,;]*/gi;
-const GENERIC_URL_REGEX = /https?:\/\/[^\s<>"')\].,;]+/gi;
+// Captura URLs (permitiendo . y , en dominio/path; la puntuación final se recorta en normalizeUrlForScraping)
+const YOUTUBE_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]{11}[^\s<>"')\]]*/gi;
+const GENERIC_URL_REGEX = /https?:\/\/[^\s<>"')\]]+/gi;
+
+/**
+ * Normaliza una URL para que sea válida y scrapeable.
+ * - Añade https si falta.
+ * - Trunca si hay un segundo "http://" o "https://" en medio (URLs pegadas).
+ * - Trunca si en el path aparece "/https-" o "/http-" (slug de URL pegada, ej: .../hoteles-con-ninos/https-familiasenruta-com/...).
+ * - Quita puntuación final que no sea parte de la URL.
+ */
+function normalizeUrlForScraping(raw) {
+  let url = (raw || "").trim();
+  if (!url) return "";
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  // Segundo protocolo literal: .../https://otro-dominio/...
+  const innerProtocol = /^(https?:\/\/[^/]+(?:\/[^/]*)*)\/https?:\/\//i.exec(url);
+  if (innerProtocol) url = innerProtocol[1];
+  // Slug de URL pegada: .../path/https-familiasenruta-com/... → quedarse con .../path
+  const slugIdx = url.toLowerCase().indexOf("/https-");
+  if (slugIdx !== -1) url = url.slice(0, slugIdx);
+  url = url.replace(/[)\].,;]+$/, "");
+  return url;
+}
 
 /**
  * Extrae pares { url, label } de una línea de texto.
+ * Las URLs se normalizan para scraping (sin concatenaciones ni basura).
  * El label es el texto que acompaña a la URL en esa línea (sin la URL), útil como título sugerido.
  */
 function extractUrlsFromLine(line) {
   const results = [];
-  // Reiniciamos los índices antes de iterar
   YOUTUBE_URL_REGEX.lastIndex = 0;
   GENERIC_URL_REGEX.lastIndex = 0;
 
-  const combined = /https?:\/\/[^\s<>"')\].,;]+|(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]{11}[^\s<>"')\].,;]*/gi;
+  const combined = /https?:\/\/[^\s<>"')\]]+|(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]{11}[^\s<>"')\]]*/gi;
   const urlsInLine = [];
   let m;
   while ((m = combined.exec(line)) !== null) urlsInLine.push(m[0]);
 
   if (urlsInLine.length === 0) return results;
 
-  // El label es la línea sin las URLs y sin prefijos de lista
   let label = line;
   for (const u of urlsInLine) label = label.replace(u, "");
   label = label.replace(/^[\s\-*•·–\d.):]+/, "").replace(/[:–-]+$/, "").trim();
 
   for (const url of urlsInLine) {
-    const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
-    results.push({ url: normalized, label: label || null });
+    const normalized = normalizeUrlForScraping(url);
+    if (normalized) results.push({ url: normalized, label: label || null });
   }
   return results;
 }
@@ -213,14 +233,21 @@ export function analyzeTextContent(text) {
     return { contentType: "plain-text", urlEntries: [], text, dominantPattern: "vacío" };
   }
 
-  // Extraer todas las URLs con su contexto de línea
+  // Extraer todas las URLs con su contexto de línea (normalizadas y sin duplicados)
   const allUrlEntries = [];
+  const seenUrls = new Set();
   let linesWithUrl = 0;
   for (const line of lines) {
     const entries = extractUrlsFromLine(line);
     if (entries.length > 0) {
       linesWithUrl++;
-      allUrlEntries.push(...entries);
+      for (const e of entries) {
+        const u = e.url.toLowerCase();
+        if (!seenUrls.has(u)) {
+          seenUrls.add(u);
+          allUrlEntries.push(e);
+        }
+      }
     }
   }
 

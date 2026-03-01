@@ -33,7 +33,7 @@ export default defineConfig({
       "/api": {
         target: proxyTarget,
         changeOrigin: true,
-        timeout: 300000,
+        timeout: 600000,
       },
     },
   },

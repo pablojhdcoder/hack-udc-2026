@@ -40,6 +40,11 @@ app.get("/api/health", (_, res) => {
 
 // Si el puerto está en uso, probar el siguiente (3002, 3003, ...) hasta levantar
 const server = http.createServer(app);
+// Timeout generoso para subidas grandes y operaciones lentas (evita ECONNRESET por cierre de socket)
+const SERVER_TIMEOUT_MS = 10 * 60 * 1000; // 10 min
+server.timeout = SERVER_TIMEOUT_MS;
+server.keepAliveTimeout = Math.max(SERVER_TIMEOUT_MS, 65000);
+server.headersTimeout = Math.max(SERVER_TIMEOUT_MS + 1000, 66000);
 const PORT_BASE = Number(process.env.PORT) || 3001;
 const PORT_MAX = PORT_BASE + 20;
 

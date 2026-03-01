@@ -116,6 +116,33 @@ async function runLinkEnrichment(id, url, preview) {
   }
 }
 
+/**
+ * Scrape + metadata + opcionalmente AI enrichment en background.
+ * Se llama después de crear un link desde un .txt para no bloquear la respuesta.
+ */
+async function runLinkScrapeAndEnrichment(item, sourceGroup, relatedLinks, aiActive) {
+  const { id, url } = item;
+  try {
+    const preview = await getLinkPreview(url);
+    const metadata = { ...preview, sourceGroup, relatedLinks };
+    await prisma.link.update({
+      where: { id },
+      data: { metadata: JSON.stringify(metadata) },
+    });
+    if (aiActive) {
+      await runLinkEnrichment(id, url, metadata);
+    }
+  } catch (err) {
+    console.warn(`[Inbox] Scrape/enrich link ${id}:`, err.message);
+    try {
+      await prisma.link.update({
+        where: { id },
+        data: { metadata: JSON.stringify({ sourceGroup, relatedLinks, error: err.message }) },
+      });
+    } catch {}
+  }
+}
+
 async function runFileEnrichment(id, filePath, type, filename) {
   try {
     const absolutePath = filePath.startsWith("/") ? filePath : path.resolve(process.cwd(), filePath);
@@ -346,32 +373,17 @@ router.post("/", optionalMulter, async (req, res) => {
               createdItems.push({ kind: "link", id: link.id, url, type: urlType, label });
             }
 
-            // Paso 2: enriquecer y vincular cada link con los demás del mismo grupo
+            // Paso 2: scrape y enriquecimiento en background (como el AI enrichment de notas/archivos)
             for (const item of createdItems) {
               const relatedLinks = createdItems
                 .filter((r) => r.id !== item.id)
                 .map((r) => ({ id: r.id, url: r.url, label: r.label }));
-
-              let preview = {};
-              try { preview = await getLinkPreview(item.url); } catch { /* silencioso */ }
-
-              // Guardar preview + metadatos de grupo en metadata
-              const metadata = {
-                ...preview,
-                sourceGroup,
-                relatedLinks,
-              };
-              await prisma.link.update({
-                where: { id: item.id },
-                data: { metadata: JSON.stringify(metadata) },
-              });
-
-              if (aiActive) {
-                runLinkEnrichment(item.id, item.url, metadata).catch((e) => console.error("[AI] Link enrichment catch:", e.message));
-              }
+              runLinkScrapeAndEnrichment(item, sourceGroup, relatedLinks, aiActive).catch((e) =>
+                console.error("[Inbox] Link scrape/enrich catch:", e.message)
+              );
             }
 
-            console.log(`[Inbox] Creados ${createdItems.length} links relacionados desde "${req.file.originalname}"`);
+            console.log(`[Inbox] Creados ${createdItems.length} links relacionados desde "${req.file.originalname}" (scrape y enriquecimiento en background)`);
             return res.status(201).json({
               kind: "text-as-links",
               sourceFilename: req.file.originalname,
@@ -997,6 +1009,8 @@ router.get("/favorites", async (req, res) => {
           url: f.url,
           content: f.content,
           type: f.type,
+          durationSeconds: f.duration ?? 0,
+          transcription: f.transcription ?? null,
           inboxStatus: f.inboxStatus,
           processedPath: f.processedPath,
           createdAt: f.createdAt,

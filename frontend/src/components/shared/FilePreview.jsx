@@ -59,9 +59,10 @@ export default function FilePreview({ item }) {
     item?.thumbnailUrl ||
     (isPhoto && item?.filePath ? buildUploadThumbUrl(item.filePath) : null);
 
-  // Para vídeos locales MP4 el backend genera thumb_<id>.jpg en uploads/
-  const localVideoThumbUrl = isVideo && item?.id
-    ? `/api/uploads/thumb_${item.id}.jpg`
+  // Para vídeos locales MP4 el backend genera thumb_<id>.jpg en uploads/. En favoritos el id es del favorito; usar sourceId (id del vídeo original).
+  const videoIdForThumb = kind === "favorite" && previewKind === "video" ? item?.sourceId : item?.id;
+  const localVideoThumbUrl = isVideo && videoIdForThumb
+    ? `/api/uploads/thumb_${videoIdForThumb}.jpg`
     : (isVideo && item?.filePath ? buildUploadThumbUrl(item.filePath) : null);
 
   const videoThumbUrl =
