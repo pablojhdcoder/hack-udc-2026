@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { ArrowLeft, Folder, Loader2, FileText, Link2, File, Image, Mic, Video, ChevronRight, Search, X } from "lucide-react";
 import FilePreview from "../shared/FilePreview";
+import ItemDetailPanel from "../Vault/ItemDetailPanel";
 import { useAppLanguage } from "../../context/LanguageContext";
-import { getInboxByKind } from "../../api/client";
+import { translations } from "../../i18n/translations";
+import { getInboxByKind, getInboxItem, checkFavorite, addToFavorites, removeFromFavorites, discardItem } from "../../api/client";
 
 const ICON_BY_KIND = {
   note: FileText,
@@ -69,13 +71,27 @@ function TemasListItem({ item, onSelect, vt }) {
 }
 
 export default function TemasView({ onBack, onSelectItem }) {
-  const { t, vt } = useAppLanguage();
+  const { t, locale } = useAppLanguage();
+  const vt = translations[locale]?.vault ?? translations.es?.vault ?? {};
   const [processedNotes, setProcessedNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [temaSeleccionado, setTemaSeleccionado] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef(null);
+
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [fullNoteContent, setFullNoteContent] = useState(null);
+  const [loadingNote, setLoadingNote] = useState(false);
+  const [favoriteCheck, setFavoriteCheck] = useState({ favorited: false, favoriteId: null });
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [panelDragY, setPanelDragY] = useState(0);
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const dragStartY = useRef(0);
+  const panelDragYRef = useRef(0);
+  const getReleaseY = (e) => (e.changedTouches ? e.changedTouches[0].clientY : e.clientY);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +143,142 @@ export default function TemasView({ onBack, onSelectItem }) {
     if (searchOpen && searchInputRef.current) searchInputRef.current.focus();
   }, [searchOpen]);
 
+  const isFavoriteItem = selectedItem?.kind === "favorite";
+
+  useEffect(() => {
+    if (!selectedItem || selectedItem.kind === "favorite") {
+      setFavoriteCheck({ favorited: false, favoriteId: null });
+      return;
+    }
+    let cancelled = false;
+    checkFavorite(selectedItem.kind, selectedItem.id).then((r) => {
+      if (!cancelled) setFavoriteCheck({ favorited: r.favorited, favoriteId: r.favoriteId });
+    });
+    return () => { cancelled = true; };
+  }, [selectedItem]);
+
+  const isNoteItem = selectedItem?.kind === "note" || selectedItem?.sourceKind === "note";
+  useEffect(() => {
+    if (!selectedItem || !isNoteItem) {
+      setFullNoteContent(null);
+      setLoadingNote(false);
+      return;
+    }
+    const kind = selectedItem.kind === "favorite" ? selectedItem.sourceKind : selectedItem.kind;
+    const id = selectedItem.kind === "favorite" ? selectedItem.sourceId : selectedItem.id;
+    setLoadingNote(true);
+    setFullNoteContent(null);
+    let cancelled = false;
+    getInboxItem(kind, id)
+      .then((data) => { if (!cancelled) setFullNoteContent(data.content ?? ""); })
+      .catch(() => { if (!cancelled) setFullNoteContent(selectedItem.content ?? ""); })
+      .finally(() => { if (!cancelled) setLoadingNote(false); });
+    return () => { cancelled = true; };
+  }, [selectedItem, isNoteItem]);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedItem(null);
+    setShowDeleteConfirm(false);
+    setPanelDragY(0);
+  }, []);
+
+  const getClientY = (e) => (e.touches ? e.touches[0].clientY : e.clientY);
+
+  const handlePanelDragStart = useCallback((e) => {
+    e.preventDefault();
+    dragStartY.current = getClientY(e);
+    setPanelDragY(0);
+    setIsDraggingPanel(true);
+  }, []);
+
+  const handlePanelDragMove = useCallback((e) => {
+    const y = getClientY(e);
+    const dy = y - dragStartY.current;
+    const next = Math.max(0, dy);
+    panelDragYRef.current = next;
+    setPanelDragY(next);
+  }, []);
+
+  const handlePanelDragEnd = useCallback((e) => {
+    const releaseY = typeof e !== "undefined" && e !== null ? getReleaseY(e) : null;
+    setIsDraggingPanel(false);
+    setPanelDragY(0);
+    const mid = typeof window !== "undefined" ? window.innerHeight / 2 : 400;
+    const inLowerHalf = releaseY != null && releaseY >= mid;
+    if (inLowerHalf) handleCloseDetail();
+  }, [handleCloseDetail]);
+
+  useEffect(() => {
+    if (!isDraggingPanel) return;
+    const onMove = (e) => {
+      e.preventDefault();
+      handlePanelDragMove(e);
+    };
+    const onEnd = (ev) => handlePanelDragEnd(ev);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("mousemove", handlePanelDragMove);
+    document.addEventListener("mouseup", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("mousemove", handlePanelDragMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
+  }, [isDraggingPanel, handlePanelDragMove, handlePanelDragEnd]);
+
+  useEffect(() => {
+    if (selectedItem) {
+      setPanelDragY(0);
+    }
+  }, [selectedItem]);
+
+  const openItemUrl = useCallback(() => {
+    if (!selectedItem) return;
+    if (selectedItem.url) {
+      window.open(selectedItem.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (selectedItem.filePath) {
+      const basename = selectedItem.filePath.split("/").pop() || selectedItem.filePath;
+      window.open(`/api/uploads/${basename}`, "_blank", "noopener,noreferrer");
+    }
+  }, [selectedItem]);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!selectedItem || selectedItem.kind === "favorite" || togglingFavorite) return;
+    setTogglingFavorite(true);
+    try {
+      if (favoriteCheck.favorited) {
+        await removeFromFavorites(favoriteCheck.favoriteId);
+        setFavoriteCheck({ favorited: false, favoriteId: null });
+      } else {
+        await addToFavorites(selectedItem.kind, selectedItem.id);
+        const r = await checkFavorite(selectedItem.kind, selectedItem.id);
+        setFavoriteCheck({ favorited: r.favorited, favoriteId: r.favoriteId });
+      }
+    } finally {
+      setTogglingFavorite(false);
+    }
+  }, [selectedItem, favoriteCheck, togglingFavorite]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!selectedItem || deleting) return;
+    setDeleting(true);
+    try {
+      await discardItem(selectedItem.kind, selectedItem.id);
+      setSelectedItem(null);
+      setShowDeleteConfirm(false);
+      setProcessedNotes((prev) => prev.filter((i) => !(i.kind === selectedItem.kind && i.id === selectedItem.id)));
+    } finally {
+      setDeleting(false);
+    }
+  }, [selectedItem, deleting]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+  }, []);
+
   if (loading) {
     return (
       <div className="h-full flex flex-col bg-zinc-50 dark:bg-neutral-950">
@@ -164,10 +316,32 @@ export default function TemasView({ onBack, onSelectItem }) {
         <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4 scrollbar-hide overscroll-contain">
           <ul className="space-y-2">
             {items.map((item) => (
-              <TemasListItem key={`${item.kind}-${item.id}`} item={item} onSelect={onSelectItem} vt={vt} />
+              <TemasListItem key={`${item.kind}-${item.id}`} item={item} onSelect={setSelectedItem} vt={vt} />
             ))}
           </ul>
         </main>
+        {selectedItem && (
+          <ItemDetailPanel
+            item={selectedItem}
+            vt={vt}
+            onClose={handleCloseDetail}
+            fullNoteContent={fullNoteContent}
+            loadingNote={loadingNote}
+            favoriteCheck={favoriteCheck}
+            togglingFavorite={togglingFavorite}
+            isFavoriteItem={false}
+            showDeleteConfirm={showDeleteConfirm}
+            deleting={deleting}
+            onOpenUrl={openItemUrl}
+            onToggleFavorite={handleToggleFavorite}
+            onDeleteClick={() => setShowDeleteConfirm(true)}
+            onConfirmDelete={handleDeleteConfirm}
+            onCancelDelete={handleCancelDelete}
+            panelDragY={panelDragY}
+            onPanelDragStart={handlePanelDragStart}
+            showDragHandle
+          />
+        )}
       </div>
     );
   }
