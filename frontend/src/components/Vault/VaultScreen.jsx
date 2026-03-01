@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, ExternalLink, Sparkles, Search, X, Tag, FolderOpen, Globe, Calendar, Network } from "lucide-react";
+import { ArrowLeft, FileText, Link2, File, Image, Mic, Video, Loader2, ChevronRight, RefreshCw, Trash2, Star, Sparkles, Search, X } from "lucide-react";
 import FilePreview from "../shared/FilePreview";
+import ItemDetailPanel from "./ItemDetailPanel";
 import { useAppLanguage } from "../../context/LanguageContext";
 import { translations } from "../../i18n/translations";
 import {
@@ -834,244 +835,36 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
       )}
 
       {selectedItem && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
-          aria-modal="true"
-          role="dialog"
-          onClick={() => {
-            if (deleting || togglingFavorite) return;
-            if (showDeleteConfirm) handleCancelDelete();
-            else setSelectedItem(null);
-          }}
-        >
-          <div
-            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl overflow-y-auto max-h-[85vh] scrollbar-hide transition-transform"
-            style={{ transform: `translateY(${panelDragY}px)` }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {showDeleteConfirm ? (
-              <>
-                <p className="text-zinc-700 dark:text-zinc-300 text-sm mb-4">
-                  {vt.deleteConfirm}
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCancelDelete}
-                    disabled={deleting}
-                    className="flex-1 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 text-sm font-medium disabled:opacity-50"
-                  >
-                    {vt.cancel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteConfirm}
-                    disabled={deleting}
-                    className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : vt.accept}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Barra para arrastrar y cerrar */}
-                <div
-                  role="button"
-                  tabIndex={0}
-                  className="w-12 h-1.5 bg-zinc-300 dark:bg-neutral-600 rounded-full mx-auto mb-4 touch-none cursor-grab active:cursor-grabbing select-none"
-                  aria-label="Arrastra hacia abajo para cerrar"
-                  onTouchStart={handlePanelDragStart}
-                  onMouseDown={handlePanelDragStart}
-                />
-
-                {/* Título */}
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-white leading-snug mb-4">
-                  {getItemDisplayTitle(selectedItem) || vt.untitled}
-                </h2>
-
-                {/* Metadata IA */}
-                <div className="space-y-3 mb-4">
-                  {/* Resumen */}
-                  <div className="rounded-xl bg-zinc-50 dark:bg-neutral-800/70 border border-zinc-200 dark:border-neutral-700/50 px-4 py-3">
-                    <p className="text-xs text-zinc-500 dark:text-neutral-400 font-medium uppercase tracking-wider mb-1">{vt.summary}</p>
-                    <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed">
-                      {selectedItem.aiSummary && selectedItem.aiSummary.trim() ? selectedItem.aiSummary : vt.noSummary}
-                    </p>
-                  </div>
-
-                  {/* Categoría + Idioma */}
-                  <div className="flex flex-wrap gap-2">
-                    {selectedItem.aiCategory ? (
-                      <div className="flex items-center gap-1.5 bg-violet-50 dark:bg-violet-950/50 border border-violet-200 dark:border-violet-500/30 rounded-full px-3 py-1.5">
-                        <FolderOpen className="w-3.5 h-3.5 text-violet-500 dark:text-violet-400 shrink-0" />
-                        <span className="text-xs text-violet-700 dark:text-violet-300 font-medium">{selectedItem.aiCategory}</span>
-                      </div>
-                    ) : null}
-                    {selectedItem.aiLanguage ? (
-                      <div className="flex items-center gap-1.5 bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 rounded-full px-3 py-1.5">
-                        <Globe className="w-3.5 h-3.5 text-zinc-500 dark:text-neutral-400 shrink-0" />
-                        <span className="text-xs text-zinc-600 dark:text-neutral-300 font-medium uppercase">{selectedItem.aiLanguage}</span>
-                      </div>
-                    ) : null}
-                    {!selectedItem.aiCategory && !selectedItem.aiLanguage ? (
-                      <span className="text-xs text-zinc-400 dark:text-neutral-500">{vt.noSummary}</span>
-                    ) : null}
-                  </div>
-
-                  {/* Temas */}
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Tag className="w-3.5 h-3.5 text-zinc-400 dark:text-neutral-500" />
-                      <span className="text-xs text-zinc-500 dark:text-neutral-500 font-medium uppercase tracking-wider">{vt.topics}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(selectedItem.aiTopics ?? selectedItem.aiTags ?? []).length > 0
-                        ? (selectedItem.aiTopics ?? selectedItem.aiTags ?? []).map((tag) => (
-                            <span
-                              key={tag}
-                              className="text-xs bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-full"
-                            >
-                              #{String(tag).trim().toLowerCase()}
-                            </span>
-                          ))
-                        : <span className="text-xs text-zinc-400 dark:text-neutral-500">{vt.noSummary}</span>}
-                    </div>
-                  </div>
-
-                  {/* Transcripción (solo audio) */}
-                  {(selectedItem.kind === "audio" || selectedItem.sourceKind === "audio") && selectedItem.transcription && (
-                    <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-4 py-3">
-                      <p className="text-xs text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wider mb-1.5">🎙 {vt.transcription ?? "Transcripción"}</p>
-                      <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed whitespace-pre-wrap">
-                        {selectedItem.transcription}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Fecha */}
-                  <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-neutral-500">
-                    <Calendar className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      {selectedItem.createdAt
-                        ? new Date(selectedItem.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })
-                        : vt.noSummary}
-                    </span>
-                  </div>
-
-                  {/* Conectado con (por temática) */}
-                  <div className="border-t border-zinc-200 dark:border-neutral-700/50 pt-3 mt-3">
-                    <button
-                      type="button"
-                      onClick={() => setRelatedOpen((o) => !o)}
-                      className="flex items-center gap-2 w-full text-left text-xs font-medium text-zinc-500 dark:text-neutral-400 hover:text-zinc-700 dark:hover:text-neutral-300"
-                    >
-                      <Network className="w-4 h-4 shrink-0" />
-                      <span>{vt.relatedLabel ?? "Conectado con"}</span>
-                      <ChevronRight className={`w-4 h-4 ml-auto transition-transform ${relatedOpen ? "rotate-90" : ""}`} />
-                    </button>
-                    {relatedOpen && (
-                      <div className="mt-2 space-y-1 max-h-44 overflow-y-auto scrollbar-hide">
-                        {loadingRelated ? (
-                          <div className="flex items-center justify-center py-4">
-                            <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />
-                          </div>
-                        ) : relatedItems.length === 0 ? (
-                          <p className="text-xs text-zinc-400 dark:text-neutral-500 py-2">{vt.relatedEmpty ?? "Nada relacionado por ahora"}</p>
-                        ) : (
-                          relatedItems.map((rel) => {
-                            const title = getItemDisplayTitle(rel);
-                            const Icon = ICON_BY_KIND[rel.kind] ?? FileText;
-                            return (
-                              <button
-                                key={`${rel.kind}-${rel.id}`}
-                                type="button"
-                                onClick={() => setSelectedItem(rel)}
-                                className="w-full flex items-center gap-2 p-2.5 rounded-xl bg-zinc-100 dark:bg-neutral-800/80 hover:bg-zinc-200 dark:hover:bg-neutral-700/80 text-left transition-colors"
-                              >
-                                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-white dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 flex items-center justify-center">
-                                  <Icon className="w-4 h-4 text-zinc-500 dark:text-neutral-400" />
-                                </div>
-                                <span className="text-sm text-zinc-800 dark:text-neutral-200 truncate flex-1">{title}</span>
-                                <ChevronRight className="w-4 h-4 text-zinc-400 flex-shrink-0" />
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Nota completa */}
-                {isNoteItem && (
-                  <div className="mb-4">
-                    <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium uppercase tracking-wider mb-2">
-                      {vt.viewNote}
-                    </p>
-                    <div className="rounded-xl border border-zinc-200 dark:border-neutral-700 bg-zinc-50 dark:bg-neutral-800/80 p-3 max-h-48 overflow-y-auto scrollbar-hide">
-                      {loadingNote ? (
-                        <div className="flex items-center justify-center py-6">
-                          <Loader2 className="w-5 h-5 text-brand-500 animate-spin" />
-                        </div>
-                      ) : (
-                        <p className="text-zinc-800 dark:text-zinc-200 text-sm whitespace-pre-wrap break-words">
-                          {fullNoteContent ?? selectedItem.content ?? vt.noSummary}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                <div className="flex flex-wrap gap-3">
-                  {(selectedItem.url || selectedItem.filePath) && (
-                    <button
-                      type="button"
-                      onClick={openItemUrl}
-                      className="flex-1 min-w-[100px] py-2.5 rounded-xl border border-brand-500/50 bg-brand-500/10 text-brand-600 dark:text-brand-400 text-sm font-medium flex items-center justify-center gap-2"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      {selectedItem.url ? vt.openLink : (selectedItem.kind === "photo" || selectedItem.sourceKind === "photo") ? vt.openImage : (selectedItem.kind === "video" || selectedItem.sourceKind === "video") ? vt.openVideo : vt.openFile}
-                    </button>
-                  )}
-                  {isFavoriteItem ? (
-                    <button
-                      type="button"
-                      onClick={handleQuitarDeFavoritos}
-                      disabled={togglingFavorite}
-                      className="flex-1 min-w-[100px] py-2.5 pl-3 pr-4 rounded-xl bg-amber-400 dark:bg-amber-500 text-white text-sm font-medium flex items-center justify-start gap-2 disabled:opacity-50"
-                    >
-                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Star className="w-4 h-4 flex-shrink-0 fill-white" />}
-                      {vt.removeFavorite}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleToggleFavorite}
-                      disabled={togglingFavorite}
-                      className={`flex-1 min-w-[100px] py-2.5 pl-3 pr-4 rounded-xl text-sm font-medium flex items-center justify-start gap-2 disabled:opacity-50 ${
-                        favoriteCheck.favorited
-                          ? "bg-amber-400 dark:bg-amber-500 text-white"
-                          : "border border-amber-400 dark:border-amber-500 text-amber-600 dark:text-amber-400"
-                      }`}
-                    >
-                      {togglingFavorite ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Star className={`w-4 h-4 flex-shrink-0 ${favoriteCheck.favorited ? "fill-white" : ""}`} />}
-                      {favoriteCheck.favorited ? vt.removeFavorite : vt.addFavorite}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    disabled={togglingFavorite}
-                    className="flex-1 min-w-[100px] py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    {vt.delete}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <ItemDetailPanel
+          item={selectedItem}
+          vt={vt}
+          onClose={() => { setShowDeleteConfirm(false); setSelectedItem(null); }}
+          fullNoteContent={fullNoteContent}
+          loadingNote={loadingNote}
+          favoriteCheck={favoriteCheck}
+          togglingFavorite={togglingFavorite}
+          isFavoriteItem={isFavoriteItem}
+          showDeleteConfirm={showDeleteConfirm}
+          deleting={deleting}
+          onOpenUrl={openItemUrl}
+          onToggleFavorite={isFavoriteItem ? undefined : handleToggleFavorite}
+          onRemoveFavorite={isFavoriteItem ? handleQuitarDeFavoritos : undefined}
+          onDeleteClick={() => setShowDeleteConfirm(true)}
+          onConfirmDelete={handleDeleteConfirm}
+          onCancelDelete={handleCancelDelete}
+          panelDragY={panelDragY}
+          onPanelDragStart={handlePanelDragStart}
+          showDragHandle
+          relatedItems={relatedItems}
+          loadingRelated={loadingRelated}
+          relatedOpen={relatedOpen}
+          onRelatedOpenChange={setRelatedOpen}
+          onSelectRelatedItem={setSelectedItem}
+          relatedLabel={vt.relatedLabel ?? "Conectado con"}
+          relatedEmpty={vt.relatedEmpty ?? "Nada relacionado por ahora"}
+          getItemDisplayTitle={getItemDisplayTitle}
+          iconByKind={ICON_BY_KIND}
+        />
       )}
     </div>
   );

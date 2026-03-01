@@ -608,11 +608,27 @@ Genera un "title" corto a partir del nombre del fichero. En "summary" escribe UN
 // ──────────────────────────────────────────────
 // Enriquecer VÍDEO
 //
-// Estrategia:
-//   1. Gemini File API: sube el vídeo y analiza el contenido real (transcripción visual,
-//      descripción de escenas, tema, contexto…).
-//   2. Fallback: enriquecimiento solo por metadatos (nombre/tipo) con Azure o Gemini.
+// Estrategia en cascada:
+//   1. Azure Whisper: transcribe la pista de audio del vídeo (mp4/webm/etc.) y
+//      genera metadatos ricos a partir de la transcripción.
+//   2. Gemini File API (análisis visual): si no hay transcripción de audio, sube
+//      el vídeo y pide a Gemini que describa visualmente su contenido. La descripción
+//      visual se guarda en el campo `transcription` para mostrarse en la UI.
+//   3. Metadata-only: último recurso, solo nombre y tipo del fichero.
 // ──────────────────────────────────────────────
+
+// Formatos de vídeo que Whisper acepta para transcripción de la pista de audio
+const VIDEO_WHISPER_EXTS = new Set(["mp4", "mpeg", "mpga", "m4a", "wav", "webm", "mp3"]);
+
+// Schema extendido para análisis visual de vídeo (incluye descripción visual)
+const VIDEO_VISUAL_JSON_SCHEMA = `{
+  "title": "título representativo (máx 30 caracteres)",
+  "summary": "resumen breve en 2-3 frases",
+  "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
+  "language": "es|en|...",
+  "category": "categoría amplia y descriptiva",
+  "visualDescription": "descripción detallada de lo que se ve en el vídeo: escenas, personas, objetos, acciones, texto visible, contexto visual, etc. Mínimo 3-5 frases."
+}`;
 
 /**
  * @param {string} filePath  - ruta relativa o absoluta al fichero de vídeo
@@ -621,22 +637,72 @@ Genera un "title" corto a partir del nombre del fichero. En "summary" escribe UN
  */
 export async function enrichVideo(filePath, filename, type) {
   const absolutePath = filePath ? resolveAbsolutePath(filePath) : null;
+  const ext = (filename || "").split(".").pop()?.toLowerCase() ?? "";
 
+  // ── Paso 1: Azure Whisper (transcripción de la pista de audio del vídeo) ──
+  if (absolutePath && existsSync(absolutePath) && VIDEO_WHISPER_EXTS.has(ext)) {
+    const transcription = await transcribeWithAzureWhisper(absolutePath, filename);
+    if (transcription) {
+      console.log(`[AI] Vídeo '${filename}' transcrito con Azure Whisper.`);
+      const instruction = `Analiza el siguiente texto, que es la transcripción del audio de un vídeo llamado "${filename}".
+Extrae metadatos estructurados sobre su contenido, tema, contexto y cualquier información relevante.
+
+TRANSCRIPCIÓN:
+"""
+${transcription.slice(0, 4000)}
+"""`;
+
+      const azureFn = () =>
+        azureGenerateContent(
+          [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: buildUserPrompt(instruction) },
+          ],
+          768
+        );
+
+      const geminiFn = () =>
+        geminiGenerateContent([{ text: `${SYSTEM_PROMPT}\n\n${buildUserPrompt(instruction)}` }], 768);
+
+      try {
+        const metadata = await enrichWithFallback(azureFn, geminiFn);
+        return withTimestamp({ ...metadata, transcription });
+      } catch (err) {
+        console.warn(`[AI] Metadatos desde transcripción de vídeo fallaron (${err.message}), continuando...`);
+      }
+    }
+  }
+
+  // ── Paso 2: Gemini File API — análisis visual completo ──
+  // Sin transcripción de audio, pedimos a Gemini que describa visualmente el vídeo.
+  // La descripción visual se guarda en `transcription` para mostrarse en la UI.
   if (absolutePath && existsSync(absolutePath) && getGeminiFileManager()) {
     try {
-      const instruction = `Analiza este vídeo y extrae metadatos estructurados.
-Describe el contenido visual, los temas tratados, el contexto y cualquier información relevante que puedas extraer.`;
-      const promptText = `${SYSTEM_PROMPT}\n\n${buildUserPrompt(instruction)}`;
+      const promptText = `${SYSTEM_PROMPT}
 
-      const data = await geminiFileAPIGenerateContent(absolutePath, filename, promptText, 1024);
-      console.log(`[AI] Vídeo '${filename}' enriquecido con File API.`);
-      return withTimestamp(data);
+Analiza este vídeo visualmente e interpreta su contenido completo.
+Observa las escenas, personas, objetos, acciones, texto visible, ambiente, colores y cualquier elemento relevante.
+
+${TOPICS_INSTRUCTION}
+
+Devuelve un JSON con la siguiente estructura exacta:
+${VIDEO_VISUAL_JSON_SCHEMA}`;
+
+      const raw = await geminiFileAPIGenerateContent(absolutePath, filename, promptText, 1400);
+
+      // Extraer visualDescription y usarla como transcription en la UI
+      const { visualDescription, ...metadata } = raw;
+      const transcription = visualDescription?.trim() || null;
+
+      console.log(`[AI] Vídeo '${filename}' analizado visualmente con Gemini File API.${transcription ? " Descripción visual generada." : ""}`);
+      return withTimestamp({ ...metadata, transcription });
     } catch (err) {
       console.warn(`[AI] Gemini File API para vídeo falló (${err.message}), usando metadata como fallback...`);
     }
   }
 
-  // Fallback: inferencia solo por nombre y tipo
+  // ── Paso 3: Metadata-only (inferencia por nombre y tipo) ──
+  console.log(`[AI] Vídeo '${filename}': usando inferencia por metadata.`);
   return enrichVideoByMetadata(filename, type);
 }
 
