@@ -1,7 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowLeft, BookOpen, Loader2, Search, X, ChevronRight, FileText, Link2, File, Image, Mic, Video, RefreshCw } from "lucide-react";
 import { useAppLanguage } from "../../context/LanguageContext";
 import { translations } from "../../i18n/translations";
+import FilePreview from "../shared/FilePreview";
+import ItemDetailPanel, { getItemDisplayTitle } from "../Vault/ItemDetailPanel";
+import {
+  getInboxItem,
+  getRelatedItems,
+  checkFavorite,
+  addToFavorites,
+  removeFromFavorites,
+  discardItem,
+  markOpened,
+} from "../../api/client";
 
 const ICON_BY_KIND = {
   note: FileText,
@@ -21,7 +32,7 @@ function normalizeText(t) {
   return String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
 
-function TopicDetail({ topic, data, onBack, vt, onOpenItem }) {
+function TopicDetail({ topic, data, onBack, vt, onOpenItemDetail }) {
   const sourceItems = data?.sourceItems ?? [];
   return (
     <div className="h-full flex flex-col bg-white dark:bg-neutral-950">
@@ -57,18 +68,18 @@ function TopicDetail({ topic, data, onBack, vt, onOpenItem }) {
             <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-2 px-1">{vt?.topicSources ?? "Fuentes"} ({sourceItems.length})</p>
             <ul className="space-y-2">
               {sourceItems.map((item, idx) => {
-                const Icon = ICON_BY_KIND[item.kind] ?? FileText;
-                const clickable = onOpenItem && item.kind && item.id;
+                const clickable = onOpenItemDetail && item.kind && item.id;
+                const rowClass = "w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-neutral-800/60 border border-zinc-200 dark:border-neutral-700/50 hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors active:scale-[0.98] text-left";
                 return (
                   <li key={`${item.kind}-${item.id ?? idx}`}>
                     {clickable ? (
                       <button
                         type="button"
-                        onClick={() => onOpenItem(item.kind, item.id)}
-                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-neutral-800/60 border border-zinc-200 dark:border-neutral-700/50 hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors active:scale-[0.98] text-left"
+                        onClick={() => onOpenItemDetail(item.kind, item.id)}
+                        className={rowClass}
                       >
-                        <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center shrink-0">
-                          <Icon className="w-4 h-4 text-brand-500" />
+                        <div className="relative flex-shrink-0">
+                          <FilePreview item={item} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{item.title ?? "(sin título)"}</p>
@@ -77,9 +88,9 @@ function TopicDetail({ topic, data, onBack, vt, onOpenItem }) {
                         <ChevronRight className="w-4 h-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                       </button>
                     ) : (
-                      <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-50 dark:bg-neutral-800/60 border border-zinc-200 dark:border-neutral-700/50">
-                        <div className="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center shrink-0">
-                          <Icon className="w-4 h-4 text-brand-500" />
+                      <div className={rowClass.replace("hover:bg-zinc-100 dark:hover:bg-neutral-800 transition-colors active:scale-[0.98]", "")}>
+                        <div className="relative flex-shrink-0">
+                          <FilePreview item={item} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200 truncate">{item.title ?? "(sin título)"}</p>
@@ -123,7 +134,10 @@ function TopicCard({ topic, summary, itemCount, updatedAt, onClick }) {
   );
 }
 
-export default function TemasView({ onBack, onOpenItem }) {
+const getReleaseY = (e) => (e.changedTouches ? e.changedTouches[0].clientY : e.clientY);
+const getClientY = (e) => (e.touches ? e.touches[0].clientY : e.clientY);
+
+export default function TemasView({ onBack }) {
   const { locale } = useAppLanguage();
   const vt = translations[locale]?.vault ?? translations.es?.vault ?? {};
   const tt = translations[locale]?.temas ?? translations.es?.temas ?? {};
@@ -135,6 +149,22 @@ export default function TemasView({ onBack, onOpenItem }) {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const searchInputRef = useRef(null);
 
+  // Detalle unificado (misma interfaz que pantalla de procesado)
+  const [selectedForDetail, setSelectedForDetail] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [favoriteCheck, setFavoriteCheck] = useState({ favorited: false, favoriteId: null });
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [relatedItems, setRelatedItems] = useState([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  const [relatedOpen, setRelatedOpen] = useState(true);
+  const [panelDragY, setPanelDragY] = useState(0);
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const dragStartY = useRef(0);
+  const panelDragYRef = useRef(0);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -142,11 +172,14 @@ export default function TemasView({ onBack, onOpenItem }) {
       setError(null);
       try {
         const res = await fetch("/api/topics");
-        if (!res.ok) throw new Error(`Error ${res.status}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (!cancelled) setError(data?.error || res.statusText || `Error ${res.status}`);
+          return;
+        }
         if (!cancelled) setTopics(Array.isArray(data) ? data : []);
       } catch (err) {
-        if (!cancelled) setError(err.message);
+        if (!cancelled) setError(err?.message ?? "Error al cargar temas");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -159,19 +192,198 @@ export default function TemasView({ onBack, onOpenItem }) {
     if (searchOpen && searchInputRef.current) searchInputRef.current.focus();
   }, [searchOpen]);
 
+  // Cargar ítem completo al abrir detalle
+  useEffect(() => {
+    if (!selectedForDetail?.kind || !selectedForDetail?.id) {
+      setDetailItem(null);
+      setLoadingDetail(false);
+      return;
+    }
+    setLoadingDetail(true);
+    setDetailItem(null);
+    let cancelled = false;
+    getInboxItem(selectedForDetail.kind, selectedForDetail.id)
+      .then((data) => {
+        if (!cancelled) setDetailItem({ ...data, kind: selectedForDetail.kind, id: selectedForDetail.id });
+      })
+      .catch(() => { if (!cancelled) setDetailItem(null); })
+      .finally(() => { if (!cancelled) setLoadingDetail(false); });
+    return () => { cancelled = true; };
+  }, [selectedForDetail]);
+
+  // Favoritos y relacionados cuando hay ítem seleccionado
+  useEffect(() => {
+    if (!detailItem) {
+      setFavoriteCheck({ favorited: false, favoriteId: null });
+      setRelatedItems([]);
+      setLoadingRelated(false);
+      return;
+    }
+    const kind = detailItem.kind;
+    const id = detailItem.id;
+    let cancelled = false;
+    checkFavorite(kind, id).then((r) => {
+      if (!cancelled) setFavoriteCheck({ favorited: r.favorited, favoriteId: r.favoriteId });
+    }).catch(() => {});
+    setLoadingRelated(true);
+    setRelatedItems([]);
+    getRelatedItems(kind, id)
+      .then((list) => { if (!cancelled) setRelatedItems(Array.isArray(list) ? list : []); })
+      .catch(() => { if (!cancelled) setRelatedItems([]); })
+      .finally(() => { if (!cancelled) setLoadingRelated(false); });
+    return () => { cancelled = true; };
+  }, [detailItem]);
+
+  const handleCloseDetail = useCallback(() => {
+    setShowDeleteConfirm(false);
+    setSelectedForDetail(null);
+    setDetailItem(null);
+  }, []);
+
+  const handlePanelDragStart = useCallback((e) => {
+    e.preventDefault();
+    dragStartY.current = getClientY(e);
+    setPanelDragY(0);
+    setIsDraggingPanel(true);
+  }, []);
+
+  const handlePanelDragMove = useCallback((e) => {
+    const y = getClientY(e);
+    const dy = y - dragStartY.current;
+    const next = Math.max(0, dy);
+    panelDragYRef.current = next;
+    setPanelDragY(next);
+  }, []);
+
+  const handlePanelDragEnd = useCallback((e) => {
+    const releaseY = typeof e !== "undefined" && e !== null ? getReleaseY(e) : null;
+    setIsDraggingPanel(false);
+    setPanelDragY(0);
+    const mid = typeof window !== "undefined" ? window.innerHeight / 2 : 400;
+    const inLowerHalf = releaseY != null && releaseY >= mid;
+    if (inLowerHalf) handleCloseDetail();
+  }, [handleCloseDetail]);
+
+  useEffect(() => {
+    if (!isDraggingPanel) return;
+    const onMove = (e) => { e.preventDefault(); handlePanelDragMove(e); };
+    const onEnd = (ev) => handlePanelDragEnd(ev);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("mousemove", handlePanelDragMove);
+    document.addEventListener("mouseup", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("mousemove", handlePanelDragMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
+  }, [isDraggingPanel, handlePanelDragMove, handlePanelDragEnd]);
+
+  const openItemUrl = useCallback(() => {
+    if (!detailItem) return;
+    if (detailItem.url) {
+      window.open(detailItem.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (detailItem.filePath) {
+      const basename = detailItem.filePath.split("/").pop() || detailItem.filePath;
+      window.open(`/api/uploads/${basename}`, "_blank", "noopener,noreferrer");
+    }
+  }, [detailItem]);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!detailItem || detailItem.kind === "favorite" || togglingFavorite) return;
+    setTogglingFavorite(true);
+    try {
+      if (favoriteCheck.favorited) {
+        await removeFromFavorites(favoriteCheck.favoriteId);
+        setFavoriteCheck({ favorited: false, favoriteId: null });
+      } else {
+        const created = await addToFavorites(detailItem.kind, detailItem.id);
+        setFavoriteCheck({ favorited: true, favoriteId: created.id });
+      }
+      handleCloseDetail();
+    } catch (err) {
+      // mantener panel abierto en error
+    } finally {
+      setTogglingFavorite(false);
+    }
+  }, [detailItem, favoriteCheck, togglingFavorite, handleCloseDetail]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!detailItem || deleting) return;
+    setDeleting(true);
+    try {
+      await discardItem(detailItem.kind, detailItem.id);
+      handleCloseDetail();
+    } catch (err) {
+      // mantener panel en error
+    } finally {
+      setDeleting(false);
+    }
+  }, [detailItem, deleting, handleCloseDetail]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+  }, []);
+
+  useEffect(() => {
+    if (detailItem) setShowDeleteConfirm(false);
+  }, [detailItem]);
+
   const filtered = topics.filter((t) =>
     !searchQuery.trim() || normalizeText(t.topic).includes(normalizeText(searchQuery))
   );
 
   if (selectedTopic) {
     return (
-      <TopicDetail
-        topic={selectedTopic.topic}
-        data={selectedTopic.data}
-        onBack={() => setSelectedTopic(null)}
-        vt={{ ...vt, ...tt }}
-        onOpenItem={onOpenItem}
-      />
+      <>
+        <TopicDetail
+          topic={selectedTopic.topic}
+          data={selectedTopic.data}
+          onBack={() => { setSelectedTopic(null); setSelectedForDetail(null); setDetailItem(null); }}
+          vt={{ ...vt, ...tt }}
+          onOpenItemDetail={(kind, id) => setSelectedForDetail({ kind, id })}
+        />
+        {selectedForDetail && loadingDetail && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-busy="true">
+            <Loader2 className="w-8 h-8 text-white animate-spin" />
+          </div>
+        )}
+        {detailItem && (
+          <ItemDetailPanel
+            item={detailItem}
+            vt={vt}
+            onClose={handleCloseDetail}
+            fullNoteContent={detailItem.content ?? null}
+            loadingNote={false}
+            favoriteCheck={favoriteCheck}
+            togglingFavorite={togglingFavorite}
+            isFavoriteItem={false}
+            showDeleteConfirm={showDeleteConfirm}
+            deleting={deleting}
+            onOpenUrl={openItemUrl}
+            onToggleFavorite={handleToggleFavorite}
+            onRemoveFavorite={undefined}
+            onDeleteClick={() => setShowDeleteConfirm(true)}
+            onConfirmDelete={handleDeleteConfirm}
+            onCancelDelete={handleCancelDelete}
+            panelDragY={panelDragY}
+            onPanelDragStart={handlePanelDragStart}
+            showDragHandle
+            relatedItems={relatedItems}
+            loadingRelated={loadingRelated}
+            relatedOpen={relatedOpen}
+            onRelatedOpenChange={setRelatedOpen}
+            onSelectRelatedItem={(rel) => setSelectedForDetail(rel ? { kind: rel.kind, id: rel.id } : null)}
+            relatedLabel={vt.relatedLabel ?? "Conectado con"}
+            relatedEmpty={vt.relatedEmpty ?? "Nada relacionado por ahora"}
+            getItemDisplayTitle={getItemDisplayTitle}
+            iconByKind={ICON_BY_KIND}
+          />
+        )}
+      </>
     );
   }
 

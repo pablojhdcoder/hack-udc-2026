@@ -157,6 +157,103 @@ function getExtensionFromFilename(name) {
   return extFromPath || "";
 }
 
+// ──────────────────────────────────────────────
+// Análisis de contenido de ficheros de texto plano
+// ──────────────────────────────────────────────
+
+// Captura la URL limpia (sin puntuación de cierre al final)
+const YOUTUBE_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]{11}[^\s<>"')\].,;]*/gi;
+const GENERIC_URL_REGEX = /https?:\/\/[^\s<>"')\].,;]+/gi;
+
+/**
+ * Extrae pares { url, label } de una línea de texto.
+ * El label es el texto que acompaña a la URL en esa línea (sin la URL), útil como título sugerido.
+ */
+function extractUrlsFromLine(line) {
+  const results = [];
+  // Reiniciamos los índices antes de iterar
+  YOUTUBE_URL_REGEX.lastIndex = 0;
+  GENERIC_URL_REGEX.lastIndex = 0;
+
+  const combined = /https?:\/\/[^\s<>"')\].,;]+|(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)[\w-]{11}[^\s<>"')\].,;]*/gi;
+  const urlsInLine = [];
+  let m;
+  while ((m = combined.exec(line)) !== null) urlsInLine.push(m[0]);
+
+  if (urlsInLine.length === 0) return results;
+
+  // El label es la línea sin las URLs y sin prefijos de lista
+  let label = line;
+  for (const u of urlsInLine) label = label.replace(u, "");
+  label = label.replace(/^[\s\-*•·–\d.):]+/, "").replace(/[:–-]+$/, "").trim();
+
+  for (const url of urlsInLine) {
+    const normalized = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+    results.push({ url: normalized, label: label || null });
+  }
+  return results;
+}
+
+/**
+ * Analiza el contenido de un fichero de texto para determinar su naturaleza semántica.
+ *
+ * Devuelve un objeto:
+ *   - contentType: "youtube-links" | "url-links" | "plain-text"
+ *   - urlEntries: Array<{ url: string, label: string|null }>
+ *   - text: string  (texto original)
+ *   - dominantPattern: descripción para logging
+ */
+export function analyzeTextContent(text) {
+  if (!text || typeof text !== "string") {
+    return { contentType: "plain-text", urlEntries: [], text: text ?? "", dominantPattern: "vacío" };
+  }
+
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return { contentType: "plain-text", urlEntries: [], text, dominantPattern: "vacío" };
+  }
+
+  // Extraer todas las URLs con su contexto de línea
+  const allUrlEntries = [];
+  let linesWithUrl = 0;
+  for (const line of lines) {
+    const entries = extractUrlsFromLine(line);
+    if (entries.length > 0) {
+      linesWithUrl++;
+      allUrlEntries.push(...entries);
+    }
+  }
+
+  // ── Detectar fichero dominado por URLs de YouTube ──
+  const youtubeEntries = allUrlEntries.filter((e) => /youtube\.com|youtu\.be/i.test(e.url));
+  if (youtubeEntries.length > 0 && linesWithUrl / lines.length >= 0.4) {
+    return {
+      contentType: "youtube-links",
+      urlEntries: youtubeEntries,
+      text,
+      dominantPattern: `${youtubeEntries.length} enlace(s) de YouTube detectados`,
+    };
+  }
+
+  // ── Detectar fichero dominado por URLs genéricas ──
+  if (allUrlEntries.length > 1 && linesWithUrl / lines.length >= 0.5) {
+    return {
+      contentType: "url-links",
+      urlEntries: allUrlEntries,
+      text,
+      dominantPattern: `${allUrlEntries.length} URL(s) genéricas detectadas`,
+    };
+  }
+
+  // Todo lo demás (listas, texto estructurado, texto libre) → texto plano
+  return {
+    contentType: "plain-text",
+    urlEntries: [],
+    text,
+    dominantPattern: "texto plano",
+  };
+}
+
 /**
  * Clasifica un fichero subido por extensión y opcionalmente por MIME.
  * Defensivo: nombre vacío/MIME → fallback; retorno siempre { kind, type } válidos.

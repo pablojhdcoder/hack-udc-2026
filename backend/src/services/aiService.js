@@ -430,10 +430,15 @@ Las palabras NO deben ser redundantes, similares ni sinónimas entre sí — cad
 Sé específico: evita términos genéricos como "tecnología", "documento", "contenido" o "general".
 Usa el idioma del contenido.`;
 
+const MAIN_THEMES_INSTRUCTION = `IMPORTANTE - Campo "mainThemes": incluye 1 o 2 temas AMPLIOS para agrupar este recurso con otros similares.
+Son conceptos de alto nivel y reutilizables (ej: "gestión-del-conocimiento", "desarrollo-profesional", "innovación-tecnológica").
+Deben permitir que distintos recursos compartan el mismo tema y generar resúmenes centralizados. Formato: minúsculas, guiones.`;
+
 const JSON_SCHEMA = `{
   "title": "título representativo (máx 30 caracteres)",
   "summary": "resumen breve del contenido en 2-3 frases, en el mismo idioma que el contenido",
   "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
+  "mainThemes": ["tema-amplio-1", "tema-amplio-2"],
   "language": "es|en|...",
   "category": "categoría amplia y descriptiva"
 }`;
@@ -442,6 +447,8 @@ function buildUserPrompt(instruction) {
   return `${instruction}
 
 ${TOPICS_INSTRUCTION}
+
+${MAIN_THEMES_INSTRUCTION}
 
 Devuelve un JSON con la siguiente estructura exacta:
 ${JSON_SCHEMA}`;
@@ -473,36 +480,154 @@ ${content.slice(0, 4000)}
 }
 
 // ──────────────────────────────────────────────
+// Reformatear texto plano / lista desde .txt
+// ──────────────────────────────────────────────
+
+/**
+ * Recibe el texto crudo de un .txt y su tipo semántico detectado,
+ * y le pide a la IA que lo devuelva como nota bien estructurada en Markdown.
+ * También extrae los metadatos habituales (title, summary, topics…).
+ *
+ * contentType: "list" | "plain-text" | "structured-text"
+ */
+export async function enrichTextAsNote(text, contentType = "plain-text") {
+  const typeDesc =
+    contentType === "list"
+      ? "una lista de elementos (puede ser con viñetas, numerada o sin estructura clara)"
+      : contentType === "structured-text"
+      ? "texto con secciones o encabezados"
+      : "texto plano sin estructura definida";
+
+  const instruction = `Se ha subido un fichero de texto (.txt) cuyo contenido es ${typeDesc}. Tu tarea es:
+1. Reescribir el contenido como una nota bien formateada en Markdown (usa encabezados ## si hay secciones, listas - o 1. si hay items, negrita para conceptos clave, etc.).
+2. Extraer metadatos estructurados.
+
+IMPORTANTE sobre el campo "formattedContent":
+- Devuelve el contenido reescrito en Markdown en el campo "formattedContent" del JSON.
+- Respeta el idioma original del texto.
+- Si es una lista, conviértela a lista Markdown con "- " o "1." según corresponda.
+- Si es texto plano, añade estructura lógica (encabezados, párrafos, énfasis en conceptos clave).
+- NO inventes contenido que no exista en el original.
+
+CONTENIDO ORIGINAL:
+"""
+${text.slice(0, 5000)}
+"""`;
+
+  const schema = `{
+  "title": "título representativo del contenido",
+  "summary": "resumen en 2-3 frases",
+  "formattedContent": "contenido reescrito en Markdown bien estructurado",
+  "topics": ["tema1", "tema2"],
+  "mainThemes": ["tema-amplio-1"],
+  "language": "es|en|...",
+  "category": "categoría del contenido",
+  "tags": ["etiqueta1", "etiqueta2"]
+}`;
+
+  const systemPrompt = `Eres un asistente de organización de conocimiento personal. Analiza el texto y devuelve ÚNICAMENTE un objeto JSON válido con este esquema:\n${schema}`;
+
+  const azureFn = () =>
+    azureGenerateContent([
+      { role: "system", content: systemPrompt },
+      { role: "user", content: instruction },
+    ], 1500);
+
+  const geminiFn = () =>
+    geminiGenerateContent([{ text: `${systemPrompt}\n\n${instruction}` }], 1500);
+
+  const result = await enrichWithFallback(azureFn, geminiFn);
+  return withTimestamp(result);
+}
+
+// ──────────────────────────────────────────────
 // Enriquecer LINK (URL + preview OG existente)
 // ──────────────────────────────────────────────
 
 export async function enrichLink(url, existingPreview = {}) {
-  const hasPreview = Object.keys(existingPreview).length > 0;
-  const previewContext = hasPreview
-    ? `Metadatos Open Graph ya extraídos:\n- Título: ${existingPreview.title ?? "N/A"}\n- Descripción: ${existingPreview.description ?? "N/A"}`
-    : "No hay metadatos previos disponibles.";
+  const firecrawlUsed = existingPreview._firecrawlUsed === true;
+  const hasMarkdown = !!existingPreview.markdown;
+  const hasOgData = !!(existingPreview.title || existingPreview.description);
 
-  // Si Firecrawl extrajo markdown, incluirlo como contexto rico (truncado a 6000 chars)
-  const markdownContext = existingPreview.markdown
-    ? `\n\nContenido completo de la página (markdown):\n"""\n${existingPreview.markdown.slice(0, 6000)}\n"""`
-    : "";
+  // ── Caso A: Firecrawl funcionó → prompt con contenido completo ──
+  if (firecrawlUsed && hasMarkdown) {
+    const previewContext = hasOgData
+      ? `Metadatos Open Graph:\n- Título: ${existingPreview.title ?? "N/A"}\n- Descripción: ${existingPreview.description ?? "N/A"}`
+      : "";
+    const markdownContext = `\n\nContenido completo de la página (markdown):\n"""\n${existingPreview.markdown.slice(0, 6000)}\n"""`;
 
-  const instruction = `Analiza el siguiente enlace y su contenido para clasificarlo y generar metadatos ricos.
+    const instruction = `Analiza el siguiente enlace y su contenido para clasificarlo y generar metadatos ricos.
 
 URL: ${url}
 ${previewContext}${markdownContext}`;
+
+    const azureFn = () =>
+      azureGenerateContent([
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: buildUserPrompt(instruction) },
+      ]);
+    const geminiFn = () =>
+      geminiGenerateContent([{ text: `${SYSTEM_PROMPT}\n\n${buildUserPrompt(instruction)}` }]);
+
+    const result = await enrichWithFallback(azureFn, geminiFn);
+    return withTimestamp(result);
+  }
+
+  // ── Caso B: Sin Firecrawl → la IA actúa como fuente primaria de análisis ──
+  // Construir todo el contexto disponible (OG básico si lo hay)
+  const ogContext = hasOgData
+    ? `Metadatos HTML disponibles:\n- Título: ${existingPreview.title ?? "N/A"}\n- Descripción: ${existingPreview.description ?? "N/A"}`
+    : "No se pudieron extraer metadatos HTML de la página.";
+
+  // Detectar dominio conocido para dar contexto adicional al modelo
+  let domainHint = "";
+  try {
+    const { hostname } = new URL(url);
+    const domain = hostname.replace(/^www\./, "");
+    const knownDomains = {
+      "youtube.com": "plataforma de vídeos YouTube",
+      "youtu.be": "enlace corto de YouTube",
+      "github.com": "repositorio en GitHub",
+      "twitter.com": "publicación en Twitter/X",
+      "x.com": "publicación en Twitter/X",
+      "reddit.com": "hilo o subreddit de Reddit",
+      "medium.com": "artículo en Medium",
+      "spotify.com": "contenido en Spotify",
+      "twitch.tv": "canal o clip de Twitch",
+      "instagram.com": "publicación en Instagram",
+      "linkedin.com": "publicación o perfil en LinkedIn",
+      "stackoverflow.com": "pregunta en Stack Overflow",
+      "arxiv.org": "paper académico en arXiv",
+      "wikipedia.org": "artículo de Wikipedia",
+    };
+    const hint = knownDomains[domain];
+    if (hint) domainHint = `\nDominio reconocido: ${hint} (${domain})`;
+  } catch { /* URL inválida, ignorar */ }
+
+  const instruction = `No se pudo acceder al contenido completo de esta URL (Firecrawl no disponible).
+Usa tu conocimiento para inferir los metadatos más precisos posibles a partir de la URL, el dominio y cualquier parámetro visible.${domainHint}
+
+URL: ${url}
+${ogContext}
+
+INSTRUCCIONES:
+- Analiza la estructura de la URL (path, query params, identificadores) para deducir el contenido.
+- Para YouTube, el parámetro "v=" identifica el vídeo; infiere el tema si es posible a partir del título OG o del ID.
+- Para GitHub, el path revela usuario/repositorio y posiblemente el lenguaje o propósito.
+- Para dominios de noticias o blogs, infiere la categoría temática desde el slug de la URL.
+- Si no puedes inferir el contenido específico, genera metadatos descriptivos del tipo de recurso y su dominio.
+- El "summary" debe ser honesto: indica que el contenido se infirió desde la URL si no había página accesible.`;
 
   const azureFn = () =>
     azureGenerateContent([
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: buildUserPrompt(instruction) },
     ]);
-
   const geminiFn = () =>
     geminiGenerateContent([{ text: `${SYSTEM_PROMPT}\n\n${buildUserPrompt(instruction)}` }]);
 
   const result = await enrichWithFallback(azureFn, geminiFn);
-  return withTimestamp(result);
+  return withTimestamp({ ...result, _inferredFromUrl: true });
 }
 
 // ──────────────────────────────────────────────
@@ -625,6 +750,7 @@ const VIDEO_VISUAL_JSON_SCHEMA = `{
   "title": "título representativo (máx 30 caracteres)",
   "summary": "resumen breve en 2-3 frases",
   "topics": ["tema-específico-1", "tema-específico-2", "tema-específico-3"],
+  "mainThemes": ["tema-amplio-1", "tema-amplio-2"],
   "language": "es|en|...",
   "category": "categoría amplia y descriptiva",
   "visualDescription": "descripción detallada de lo que se ve en el vídeo: escenas, personas, objetos, acciones, texto visible, contexto visual, etc. Mínimo 3-5 frases."
@@ -684,6 +810,8 @@ Analiza este vídeo visualmente e interpreta su contenido completo.
 Observa las escenas, personas, objetos, acciones, texto visible, ambiente, colores y cualquier elemento relevante.
 
 ${TOPICS_INSTRUCTION}
+
+${MAIN_THEMES_INSTRUCTION}
 
 Devuelve un JSON con la siguiente estructura exacta:
 ${VIDEO_VISUAL_JSON_SCHEMA}`;

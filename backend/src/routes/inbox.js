@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { spawn } from "child_process";
 import prisma from "../lib/prisma.js";
-import { classifyInput, classifyFile } from "../services/classifyService.js";
+import { classifyInput, classifyFile, analyzeTextContent } from "../services/classifyService.js";
 import { getLinkPreview } from "../services/linkPreviewService.js";
 import { optionalMulter } from "../middleware/upload.js";
 import {
@@ -310,6 +310,103 @@ router.post("/", optionalMulter, async (req, res) => {
           inboxStatus: "pending",
           aiEnrichmentPending: aiActive,
         });
+      }
+
+      // ── Análisis inteligente de ficheros de texto plano (.txt, .md) ──
+      // Detecta si el contenido son links de YouTube, listas u otro texto
+      // y re-enruta la entidad al tipo semántico correcto.
+      if (type === "text" || type === "markdown" || type === "txt" || type === "md") {
+        let rawText = null;
+        try {
+          rawText = fs.readFileSync(req.file.path, "utf-8");
+        } catch {
+          // Si no se puede leer, continúa como fichero normal
+        }
+
+        if (rawText) {
+          const analysis = analyzeTextContent(rawText);
+          console.log(`[Inbox] Análisis de texto "${req.file.originalname}": ${analysis.dominantPattern}`);
+
+          // ── Caso: fichero con links (YouTube o genéricos) → un Link por URL ──
+          if (analysis.contentType === "youtube-links" || analysis.contentType === "url-links") {
+            const sourceGroup = req.file.originalname; // identificador de grupo
+
+            // Paso 1: crear todos los links en BD
+            const createdItems = [];
+            for (const { url, label } of analysis.urlEntries) {
+              const urlType = /youtube\.com|youtu\.be/i.test(url) ? "youtube" : "generic";
+              const link = await prisma.link.create({
+                data: {
+                  url,
+                  type: urlType,
+                  title: label || null,
+                  inboxStatus: "pending",
+                },
+              });
+              createdItems.push({ kind: "link", id: link.id, url, type: urlType, label });
+            }
+
+            // Paso 2: enriquecer y vincular cada link con los demás del mismo grupo
+            for (const item of createdItems) {
+              const relatedLinks = createdItems
+                .filter((r) => r.id !== item.id)
+                .map((r) => ({ id: r.id, url: r.url, label: r.label }));
+
+              let preview = {};
+              try { preview = await getLinkPreview(item.url); } catch { /* silencioso */ }
+
+              // Guardar preview + metadatos de grupo en metadata
+              const metadata = {
+                ...preview,
+                sourceGroup,
+                relatedLinks,
+              };
+              await prisma.link.update({
+                where: { id: item.id },
+                data: { metadata: JSON.stringify(metadata) },
+              });
+
+              if (aiActive) {
+                runLinkEnrichment(item.id, item.url, metadata).catch((e) => console.error("[AI] Link enrichment catch:", e.message));
+              }
+            }
+
+            console.log(`[Inbox] Creados ${createdItems.length} links relacionados desde "${req.file.originalname}"`);
+            return res.status(201).json({
+              kind: "text-as-links",
+              sourceFilename: req.file.originalname,
+              contentType: analysis.contentType,
+              items: createdItems,
+              aiEnrichmentPending: aiActive,
+            });
+          }
+
+          // ── Caso: texto plano (incluye listas) → guardar como nota sin transformar ──
+          if (analysis.contentType === "plain-text") {
+            const note = await prisma.note.create({
+              data: {
+                content: rawText.slice(0, 10000),
+                type: "note",
+                inboxStatus: "pending",
+              },
+            });
+
+            if (aiActive) {
+              runNoteEnrichment(note.id, note.content).catch((e) => console.error("[AI] Note enrichment catch:", e.message));
+            }
+
+            return res.status(201).json({
+              kind: "note",
+              id: note.id,
+              type: note.type,
+              content: note.content,
+              sourceFilename: req.file.originalname,
+              createdAt: note.createdAt,
+              inboxStatus: "pending",
+              aiEnrichmentPending: aiActive,
+            });
+          }
+        }
       }
 
       const file = await prisma.file.create({
@@ -1157,7 +1254,7 @@ router.get("/export", async (req, res) => {
 });
 
 // ──────────────────────────────────────────────
-// GET /api/inbox/:kind/:id — Detalle de un item (incluye aiEnrichment)
+// GET /api/inbox/:kind/:id — Detalle de un item (misma forma que listados: aiTitle, aiSummary, aiTopics, etc.)
 // ──────────────────────────────────────────────
 
 router.get("/:kind/:id", async (req, res) => {
@@ -1170,26 +1267,60 @@ router.get("/:kind/:id", async (req, res) => {
     const item = await model.findUnique({ where: { id } });
     if (!item) return res.status(404).json({ error: "No encontrado" });
 
-    let aiEnrichment = null;
-    if (item.aiEnrichment && typeof item.aiEnrichment === "string") {
-      try {
-        aiEnrichment = JSON.parse(item.aiEnrichment);
-      } catch {
-        aiEnrichment = null;
-      }
-    }
+    const ai = parseAI(item.aiEnrichment);
+    const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+    const normalized = {
+      aiTitle:    ai?.title    ?? null,
+      aiSummary:  ai?.summary  ?? null,
+      aiLanguage: ai?.language ?? null,
+      aiCategory: ai?.category ?? null,
+      aiTopics:   topics,
+      aiTags:     topics,
+    };
 
-    return res.json({
-      ...item,
-      aiEnrichment,
-    });
+    const base = {
+      kind,
+      id: item.id,
+      title: toItemTitle(item, kind),
+      inboxStatus: item.inboxStatus,
+      processedPath: item.processedPath,
+      createdAt: item.createdAt,
+      ...normalized,
+    };
+
+    if (kind === "link") {
+      let metadata = null;
+      if (item.metadata) {
+        try { metadata = typeof item.metadata === "string" ? JSON.parse(item.metadata) : item.metadata; } catch {}
+      }
+      return res.json({ ...base, url: item.url, type: item.type, metadata });
+    }
+    if (kind === "note") {
+      return res.json({ ...base, content: item.content ?? "", type: item.type });
+    }
+    if (kind === "file") {
+      return res.json({ ...base, filename: item.filename, type: item.type, filePath: item.filePath, size: item.size });
+    }
+    if (kind === "photo") {
+      return res.json({ ...base, filename: item.filename, type: item.type, filePath: item.filePath, size: item.size });
+    }
+    if (kind === "audio") {
+      const audioFilename = item.filename ?? ai?.title ?? (item.filePath ? path.basename(item.filePath) : null) ?? "Audio";
+      return res.json({ ...base, filename: audioFilename, type: item.type, filePath: item.filePath, duration: item.duration, transcription: item.transcription ?? null });
+    }
+    if (kind === "video") {
+      const videoTitle = item.title ?? ai?.title ?? "Vídeo";
+      const videoFilename = item.title ?? ai?.title ?? (item.filePath ? path.basename(item.filePath) : null) ?? "Vídeo";
+      return res.json({ ...base, title: videoTitle, filename: videoFilename, type: item.type, filePath: item.filePath, duration: item.duration, transcription: item.transcription ?? null });
+    }
+    return res.json(base);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // ──────────────────────────────────────────────
-// PATCH /api/inbox/:kind/:id — Actualizar aiEnrichment (title, summary, topics)
+// PATCH /api/inbox/:kind/:id — Actualizar aiEnrichment (title, summary, topics, mainThemes)
 // ──────────────────────────────────────────────
 
 router.patch("/:kind/:id", async (req, res) => {
@@ -1207,10 +1338,11 @@ router.patch("/:kind/:id", async (req, res) => {
       try { aiEnrichment = JSON.parse(item.aiEnrichment); } catch {}
     }
 
-    const { title, summary, topics } = req.body;
+    const { title, summary, topics, mainThemes } = req.body;
     if (title !== undefined) aiEnrichment.title = title;
     if (summary !== undefined) aiEnrichment.summary = summary;
     if (topics !== undefined) aiEnrichment.topics = Array.isArray(topics) ? topics : [];
+    if (mainThemes !== undefined) aiEnrichment.mainThemes = Array.isArray(mainThemes) ? mainThemes : [];
 
     await model.update({ where: { id }, data: { aiEnrichment: JSON.stringify(aiEnrichment) } });
 

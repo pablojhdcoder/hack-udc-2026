@@ -67,16 +67,17 @@ async function ogFallback(url) {
  * 2. Fallback: scraping OG básico.
  *
  * @param {string} url
- * @returns {Promise<{ title?, description?, image?, markdown?, sourceURL? }>}
+ * @returns {Promise<{ title?, description?, image?, markdown?, sourceURL?, _firecrawlUsed?: boolean }>}
  */
 export async function getLinkPreview(url) {
   const fc = await firecrawlScrape(url);
   if (fc) {
     console.log(`[Firecrawl] ✓ Scraped: ${url}`);
-    return fc;
+    return { ...fc, _firecrawlUsed: true };
   }
   console.log(`[Firecrawl] Sin API key o falló, usando fallback OG para: ${url}`);
-  return ogFallback(url);
+  const og = await ogFallback(url);
+  return { ...og, _firecrawlUsed: false };
 }
 
 /**

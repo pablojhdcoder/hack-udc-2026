@@ -1,5 +1,28 @@
-import { useState, useEffect, useMemo } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Sparkles, Trash2, CalendarDays } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Sparkles, Trash2, CalendarDays, Loader2, FileText, Link2, File, Image, Mic, Video } from "lucide-react";
+import { useAppLanguage } from "../../context/LanguageContext";
+import { translations } from "../../i18n/translations";
+import ItemDetailPanel, { getItemDisplayTitle } from "../Vault/ItemDetailPanel";
+import {
+  getInboxItem,
+  getRelatedItems,
+  checkFavorite,
+  addToFavorites,
+  removeFromFavorites,
+  discardItem,
+} from "../../api/client";
+
+const ICON_BY_KIND = {
+  note: FileText,
+  link: Link2,
+  file: File,
+  photo: Image,
+  audio: Mic,
+  video: Video,
+};
+
+const getReleaseY = (e) => (e.changedTouches ? e.changedTouches[0].clientY : e.clientY);
+const getClientY = (e) => (e.touches ? e.touches[0].clientY : e.clientY);
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -41,13 +64,31 @@ function getEventDateKey(event) {
   return toDateKey(d);
 }
 
-export default function CalendarioView({ onBack, onNavigateToSource }) {
+export default function CalendarioView({ onBack }) {
+  const { locale } = useAppLanguage();
+  const vt = translations[locale]?.vault ?? translations.es?.vault ?? {};
   const today = useMemo(() => new Date(), []);
   const [currentDate, setCurrentDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), today.getDate()));
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+
+  // Panel de detalle unificado (misma interfaz que procesado/temas)
+  const [selectedForDetail, setSelectedForDetail] = useState(null);
+  const [detailItem, setDetailItem] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [favoriteCheck, setFavoriteCheck] = useState({ favorited: false, favoriteId: null });
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [relatedItems, setRelatedItems] = useState([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  const [relatedOpen, setRelatedOpen] = useState(true);
+  const [panelDragY, setPanelDragY] = useState(0);
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const dragStartY = useRef(0);
+  const panelDragYRef = useRef(0);
 
   const fetchEvents = () => {
     setIsLoading(true);
@@ -88,6 +129,145 @@ export default function CalendarioView({ onBack, onNavigateToSource }) {
     }
   };
 
+  // Cargar ítem al abrir detalle desde un evento
+  useEffect(() => {
+    if (!selectedForDetail?.kind || !selectedForDetail?.id) {
+      setDetailItem(null);
+      setLoadingDetail(false);
+      return;
+    }
+    setLoadingDetail(true);
+    setDetailItem(null);
+    let cancelled = false;
+    getInboxItem(selectedForDetail.kind, selectedForDetail.id)
+      .then((data) => {
+        if (!cancelled) setDetailItem({ ...data, kind: selectedForDetail.kind, id: selectedForDetail.id });
+      })
+      .catch(() => { if (!cancelled) setDetailItem(null); })
+      .finally(() => { if (!cancelled) setLoadingDetail(false); });
+    return () => { cancelled = true; };
+  }, [selectedForDetail]);
+
+  useEffect(() => {
+    if (!detailItem) {
+      setFavoriteCheck({ favorited: false, favoriteId: null });
+      setRelatedItems([]);
+      setLoadingRelated(false);
+      return;
+    }
+    const kind = detailItem.kind;
+    const id = detailItem.id;
+    let cancelled = false;
+    checkFavorite(kind, id).then((r) => {
+      if (!cancelled) setFavoriteCheck({ favorited: r.favorited, favoriteId: r.favoriteId });
+    }).catch(() => {});
+    setLoadingRelated(true);
+    setRelatedItems([]);
+    getRelatedItems(kind, id)
+      .then((list) => { if (!cancelled) setRelatedItems(Array.isArray(list) ? list : []); })
+      .catch(() => { if (!cancelled) setRelatedItems([]); })
+      .finally(() => { if (!cancelled) setLoadingRelated(false); });
+    return () => { cancelled = true; };
+  }, [detailItem]);
+
+  const handleCloseDetail = useCallback(() => {
+    setShowDeleteConfirm(false);
+    setSelectedForDetail(null);
+    setDetailItem(null);
+  }, []);
+
+  const handlePanelDragStart = useCallback((e) => {
+    e.preventDefault();
+    dragStartY.current = getClientY(e);
+    setPanelDragY(0);
+    setIsDraggingPanel(true);
+  }, []);
+
+  const handlePanelDragMove = useCallback((e) => {
+    const y = getClientY(e);
+    const dy = y - dragStartY.current;
+    const next = Math.max(0, dy);
+    panelDragYRef.current = next;
+    setPanelDragY(next);
+  }, []);
+
+  const handlePanelDragEnd = useCallback((e) => {
+    const releaseY = typeof e !== "undefined" && e !== null ? getReleaseY(e) : null;
+    setIsDraggingPanel(false);
+    setPanelDragY(0);
+    const mid = typeof window !== "undefined" ? window.innerHeight / 2 : 400;
+    const inLowerHalf = releaseY != null && releaseY >= mid;
+    if (inLowerHalf) handleCloseDetail();
+  }, [handleCloseDetail]);
+
+  useEffect(() => {
+    if (!isDraggingPanel) return;
+    const onMove = (e) => { e.preventDefault(); handlePanelDragMove(e); };
+    const onEnd = (ev) => handlePanelDragEnd(ev);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("mousemove", handlePanelDragMove);
+    document.addEventListener("mouseup", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("mousemove", handlePanelDragMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
+  }, [isDraggingPanel, handlePanelDragMove, handlePanelDragEnd]);
+
+  const openItemUrl = useCallback(() => {
+    if (!detailItem) return;
+    if (detailItem.url) {
+      window.open(detailItem.url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (detailItem.filePath) {
+      const basename = detailItem.filePath.split("/").pop() || detailItem.filePath;
+      window.open(`/api/uploads/${basename}`, "_blank", "noopener,noreferrer");
+    }
+  }, [detailItem]);
+
+  const handleToggleFavorite = useCallback(async () => {
+    if (!detailItem || detailItem.kind === "favorite" || togglingFavorite) return;
+    setTogglingFavorite(true);
+    try {
+      if (favoriteCheck.favorited) {
+        await removeFromFavorites(favoriteCheck.favoriteId);
+        setFavoriteCheck({ favorited: false, favoriteId: null });
+      } else {
+        const created = await addToFavorites(detailItem.kind, detailItem.id);
+        setFavoriteCheck({ favorited: true, favoriteId: created.id });
+      }
+      handleCloseDetail();
+    } catch (err) {
+      // mantener panel abierto en error
+    } finally {
+      setTogglingFavorite(false);
+    }
+  }, [detailItem, favoriteCheck, togglingFavorite, handleCloseDetail]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!detailItem || deleting) return;
+    setDeleting(true);
+    try {
+      await discardItem(detailItem.kind, detailItem.id);
+      handleCloseDetail();
+    } catch (err) {
+      // mantener panel en error
+    } finally {
+      setDeleting(false);
+    }
+  }, [detailItem, deleting, handleCloseDetail]);
+
+  const handleCancelDelete = useCallback(() => {
+    setShowDeleteConfirm(false);
+  }, []);
+
+  useEffect(() => {
+    if (detailItem) setShowDeleteConfirm(false);
+  }, [detailItem]);
+
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
   const daysInMonth = getDaysInMonth(year, month);
@@ -116,7 +296,14 @@ export default function CalendarioView({ onBack, onNavigateToSource }) {
     setSelectedDate(new Date(year, month, dayNum));
   };
 
+  const openDetailFromEvent = (event) => {
+    if (event.sourceKind && event.sourceId) {
+      setSelectedForDetail({ kind: event.sourceKind, id: event.sourceId });
+    }
+  };
+
   return (
+    <>
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-950">
       <header className="shrink-0 flex items-center h-14 px-4 border-b border-zinc-200 dark:border-neutral-800 safe-top">
         <button
@@ -241,13 +428,9 @@ export default function CalendarioView({ onBack, onNavigateToSource }) {
                     .map((event, index) => (
                     <li
                       key={event.id ?? index}
-                      onClick={() => {
-                        if (onNavigateToSource && event.sourceKind && event.sourceId) {
-                          onNavigateToSource(event.sourceKind, event.sourceId);
-                        }
-                      }}
+                      onClick={() => openDetailFromEvent(event)}
                       className={`rounded-xl bg-zinc-50 dark:bg-neutral-800/80 border border-zinc-200 dark:border-neutral-700/50 p-4 flex flex-col gap-1.5 group ${
-                        onNavigateToSource && event.sourceKind && event.sourceId
+                        event.sourceKind && event.sourceId
                           ? "cursor-pointer hover:bg-zinc-100 dark:hover:bg-neutral-800/90 transition-colors"
                           : ""
                       }`}
@@ -294,5 +477,44 @@ export default function CalendarioView({ onBack, onNavigateToSource }) {
         )}
       </main>
     </div>
+
+    {selectedForDetail && loadingDetail && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" aria-busy="true">
+        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      </div>
+    )}
+    {detailItem && (
+      <ItemDetailPanel
+        item={detailItem}
+        vt={vt}
+        onClose={handleCloseDetail}
+        fullNoteContent={detailItem.content ?? null}
+        loadingNote={false}
+        favoriteCheck={favoriteCheck}
+        togglingFavorite={togglingFavorite}
+        isFavoriteItem={false}
+        showDeleteConfirm={showDeleteConfirm}
+        deleting={deleting}
+        onOpenUrl={openItemUrl}
+        onToggleFavorite={handleToggleFavorite}
+        onRemoveFavorite={undefined}
+        onDeleteClick={() => setShowDeleteConfirm(true)}
+        onConfirmDelete={handleDeleteConfirm}
+        onCancelDelete={handleCancelDelete}
+        panelDragY={panelDragY}
+        onPanelDragStart={handlePanelDragStart}
+        showDragHandle
+        relatedItems={relatedItems}
+        loadingRelated={loadingRelated}
+        relatedOpen={relatedOpen}
+        onRelatedOpenChange={setRelatedOpen}
+        onSelectRelatedItem={(rel) => rel && setSelectedForDetail({ kind: rel.kind, id: rel.id })}
+        relatedLabel={vt.relatedLabel ?? "Conectado con"}
+        relatedEmpty={vt.relatedEmpty ?? "Nada relacionado por ahora"}
+        getItemDisplayTitle={getItemDisplayTitle}
+        iconByKind={ICON_BY_KIND}
+      />
+    )}
+    </>
   );
 }

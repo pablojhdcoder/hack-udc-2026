@@ -24,11 +24,16 @@ function normalizeTopic(t) {
 
 /**
  * Genera/mejora los resúmenes de tema para cada topic del ítem procesado.
+ * Usa mainThemes (persistidos en aiEnrichment en BD) para agrupar recursos y generar resúmenes;
+ * si no hay mainThemes, usa topics como fallback.
  * Se llama en background (no bloquea la respuesta al cliente).
  */
 async function upsertTopicSummaries(entity, aiEnrichment) {
-  const topics = aiEnrichment?.topics ?? aiEnrichment?.aiTopics ?? aiEnrichment?.tags ?? [];
-  if (!Array.isArray(topics) || topics.length === 0) return;
+  const themesForGrouping =
+    Array.isArray(aiEnrichment?.mainThemes) && aiEnrichment.mainThemes.length > 0
+      ? aiEnrichment.mainThemes
+      : (aiEnrichment?.topics ?? aiEnrichment?.aiTopics ?? aiEnrichment?.tags ?? []);
+  if (!Array.isArray(themesForGrouping) || themesForGrouping.length === 0) return;
 
   const itemInfo = {
     kind: entity.kind,
@@ -37,7 +42,7 @@ async function upsertTopicSummaries(entity, aiEnrichment) {
     content: entity.content ?? null,
   };
 
-  for (const rawTopic of topics) {
+  for (const rawTopic of themesForGrouping) {
     const topic = normalizeTopic(rawTopic);
     if (!topic) continue;
     try {
@@ -45,7 +50,15 @@ async function upsertTopicSummaries(entity, aiEnrichment) {
       const newSummary = await updateTopicSummary(topic, existing?.summary ?? null, itemInfo);
 
       const prevItems = (() => { try { return JSON.parse(existing?.sourceItems ?? "[]"); } catch { return []; } })();
-      const newSourceItem = { kind: entity.kind, id: entity.id, title: itemInfo.title, createdAt: new Date().toISOString() };
+      const newSourceItem = {
+        kind: entity.kind,
+        id: entity.id,
+        title: itemInfo.title,
+        createdAt: new Date().toISOString(),
+        filePath: entity.filePath ?? null,
+        url: entity.url ?? null,
+        type: entity.type ?? null,
+      };
       // Deduplicar por kind+id
       const merged = [...prevItems.filter((i) => !(i.kind === entity.kind && i.id === entity.id)), newSourceItem];
 
@@ -99,8 +112,11 @@ async function ensureEnrichment(kind, id, entity) {
     return entity;
   }
 
+  // Persiste el enriquecimiento completo en BD (incl. mainThemes) para clasificación en Temas y resúmenes por tema
   const enrichmentPayload = (enrichment) => {
-    return { aiEnrichment: JSON.stringify(enrichment) };
+    const toSave = { ...enrichment };
+    if (!Array.isArray(toSave.mainThemes)) toSave.mainThemes = [];
+    return { aiEnrichment: JSON.stringify(toSave) };
   };
 
   let enrichment;

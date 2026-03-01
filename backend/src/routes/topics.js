@@ -23,7 +23,14 @@ router.get("/", async (req, res) => {
       }))
     );
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const msg = err?.message ?? String(err);
+    // Si la tabla no existe (migraciones sin aplicar), devolver lista vacía para no romper la pantalla
+    if (/table.*TopicSummary|no such table|does not exist/i.test(msg)) {
+      console.warn("[Topics] Tabla TopicSummary no encontrada. Ejecuta: npx prisma migrate dev o npx prisma db push");
+      return res.json([]);
+    }
+    console.error("[Topics] GET / error:", msg);
+    res.status(500).json({ error: msg });
   }
 });
 
@@ -46,7 +53,9 @@ router.get("/:topic", async (req, res) => {
       })(),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    const msg = err?.message ?? String(err);
+    console.error("[Topics] GET /:topic error:", msg);
+    res.status(500).json({ error: msg });
   }
 });
 

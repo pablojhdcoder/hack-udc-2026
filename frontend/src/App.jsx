@@ -134,13 +134,20 @@ export default function App() {
   const handleAddToInbox = useCallback(async (payload) => {
     try {
       const newItem = await addToInbox(payload);
+      // Cuando el backend descompone un fichero de texto en múltiples ítems
+      // (p.ej. links de YouTube) o en una nota reformateada, no existe un único
+      // item que añadir: recargamos el inbox completo para que aparezcan todos.
+      if (newItem?.kind === "text-as-links" || newItem?.sourceFilename) {
+        await loadInbox();
+        return newItem;
+      }
       setItems((prev) => [newItem, ...prev]);
       return newItem;
     } catch (err) {
       setError(err.message);
       throw err;
     }
-  }, []);
+  }, [loadInbox]);
 
   const filteredItems = useMemo(() => {
     const byKind = filterByKind(items, typeFilter);
@@ -248,13 +255,7 @@ export default function App() {
   if (currentView === "temas") {
     return (
       <MobileFrame>
-        <TemasView
-          onBack={() => setCurrentView("inbox")}
-          onOpenItem={(kind, id) => {
-            setVaultInitial({ folder: kind, itemId: id ?? null });
-            setCurrentView("procesado");
-          }}
-        />
+        <TemasView onBack={() => setCurrentView("inbox")} />
       </MobileFrame>
     );
   }
@@ -262,13 +263,7 @@ export default function App() {
   if (currentView === "calendario") {
     return (
       <MobileFrame>
-        <CalendarioView
-          onBack={() => setCurrentView("inbox")}
-          onNavigateToSource={(kind, id) => {
-            setVaultInitial({ folder: kind, itemId: id ?? null });
-            setCurrentView("procesado");
-          }}
-        />
+        <CalendarioView onBack={() => setCurrentView("inbox")} />
       </MobileFrame>
     );
   }
