@@ -1,6 +1,7 @@
 /**
  * chatService.js — Chat con contexto completo de la app para Riki Brain.
- * Recupera: bóveda (notas, enlaces, archivos, fotos, audios, vídeos), calendario, temas, fábrica de ideas (pendientes).
+ * Principal: Azure OpenAI Responses API (gpt-5.1-chat). Fallback: Gemini.
+ * Recupera: bóveda, calendario, temas, fábrica de ideas (pendientes).
  */
 
 import prisma from "../lib/prisma.js";
@@ -10,10 +11,17 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
 const geminiModel = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }) : null;
 
-const MAX_CONTEXT_ITEMS = 20;
-const MAX_SUMMARY_CHARS = 280;
+const AZURE_CHAT_URL = (process.env.AZURE_CHAT_RESPONSES_URL ?? "").trim();
+const AZURE_CHAT_API_KEY = process.env.AZURE_CHAT_API_KEY ?? "";
+const AZURE_CHAT_MODEL = (process.env.AZURE_CHAT_MODEL ?? "gpt-5.1-chat").trim();
+const isAzureChatConfigured = AZURE_CHAT_URL.length > 0 && AZURE_CHAT_API_KEY.length > 0 && !AZURE_CHAT_API_KEY.toLowerCase().includes("your-");
+
+const MAX_SUMMARY_CHARS = 220;
 const MAX_CALENDAR_EVENTS = 30;
 const MAX_TOPICS = 25;
+// Cuántos ítems incluir por tipo en la muestra (reparto equilibrado para que PDFs/archivos no queden ocultos)
+const PER_KIND_TAKE = { note: 35, link: 35, file: 50, photo: 25, audio: 25, video: 25 };
+const MAX_ITEMS_TOTAL = 80;
 
 function parseAiEnrichment(jsonStr) {
   if (!jsonStr) return null;
@@ -24,12 +32,31 @@ function parseAiEnrichment(jsonStr) {
   }
 }
 
+/** Etiqueta legible por tipo de archivo (PDF, Word, etc.) para que el modelo sepa qué hay. */
+function fileTypeLabel(type) {
+  if (!type || typeof type !== "string") return "Archivo";
+  const t = type.toLowerCase();
+  if (t === "pdf") return "Archivo PDF";
+  if (t === "word" || t === "doc" || t === "docx") return "Archivo Word";
+  if (t === "spreadsheet" || t.includes("xls")) return "Hoja de cálculo";
+  if (t === "presentation" || t.includes("ppt")) return "Presentación";
+  if (t === "image" || t === "photo") return "Imagen";
+  return `Archivo ${type}`;
+}
+
 function toContextLine(item) {
   const ai = parseAiEnrichment(item.aiEnrichment);
-  const title = (ai?.title ?? item.title ?? item.filename ?? item.url ?? "Sin título").slice(0, 120);
-  const rawSummary = ai?.summary ?? item.content?.slice(0, 400) ?? "";
+  const title = (ai?.title ?? item.title ?? item.filename ?? item.url ?? "Sin título").slice(0, 100);
+  const rawSummary = ai?.summary ?? item.content?.slice(0, 350) ?? "";
   const summary = rawSummary.slice(0, MAX_SUMMARY_CHARS) + (rawSummary.length > MAX_SUMMARY_CHARS ? "…" : "");
-  const kindLabel = item.kind === "note" ? "Nota" : item.kind === "link" ? "Enlace" : item.kind === "file" ? "Archivo" : item.kind === "photo" ? "Foto" : item.kind === "audio" ? "Audio" : item.kind === "video" ? "Vídeo" : item.kind;
+  let kindLabel;
+  if (item.kind === "file") {
+    kindLabel = fileTypeLabel(item.type);
+    const fname = (item.filename || "").trim();
+    if (fname) kindLabel += ` («${fname.slice(-40)}»)`;
+  } else {
+    kindLabel = item.kind === "note" ? "Nota" : item.kind === "link" ? "Enlace" : item.kind === "photo" ? "Foto" : item.kind === "audio" ? "Audio" : item.kind === "video" ? "Vídeo" : item.kind;
+  }
   return `[${kindLabel}] ${title}\n${summary}`.trim();
 }
 
@@ -41,56 +68,147 @@ function toCatalogItem(item) {
 }
 
 /**
- * Recupera contexto de la bóveda: últimos ítems procesados + catálogo (id, kind, title, topics).
- * Opcionalmente filtra por palabras clave del mensaje.
- * @returns {{ contextText: string, catalog: Array<{ id: string, kind: string, title: string, topics: string[] }> }}
+ * Resumen real de la base de datos: conteos en el baúl (procesados), en la fábrica (pendientes) y totales.
+ * Así el modelo sabe cuántos enlaces/notas/archivos hay en total, no solo los ya procesados.
+ */
+async function getDatabaseSummary() {
+  const whereProcessed = { inboxStatus: "processed" };
+  const wherePending = { inboxStatus: "pending" };
+
+  const [
+    notesProcessed, linksProcessed, filesProcessed, photosProcessed, audiosProcessed, videosProcessed,
+    notesPending, linksPending, filesPending, photosPending, audiosPending, videosPending,
+    filesByType, favoritesCount,
+  ] = await Promise.all([
+    prisma.note.count({ where: whereProcessed }),
+    prisma.link.count({ where: whereProcessed }),
+    prisma.file.count({ where: whereProcessed }),
+    prisma.photo.count({ where: whereProcessed }),
+    prisma.audio.count({ where: whereProcessed }),
+    prisma.video.count({ where: whereProcessed }),
+    prisma.note.count({ where: wherePending }),
+    prisma.link.count({ where: wherePending }),
+    prisma.file.count({ where: wherePending }),
+    prisma.photo.count({ where: wherePending }),
+    prisma.audio.count({ where: wherePending }),
+    prisma.video.count({ where: wherePending }),
+    prisma.file.groupBy({ by: ["type"], where: whereProcessed, _count: { type: true } }),
+    prisma.favorite.count().catch(() => 0),
+  ]);
+
+  const totalProcessed = notesProcessed + linksProcessed + filesProcessed + photosProcessed + audiosProcessed + videosProcessed;
+  const totalPending = notesPending + linksPending + filesPending + photosPending + audiosPending + videosPending;
+  const totalAll = totalProcessed + totalPending;
+
+  const baúlParts = [];
+  if (notesProcessed) baúlParts.push(`${notesProcessed} nota(s)`);
+  if (linksProcessed) baúlParts.push(`${linksProcessed} enlace(s)`);
+  if (filesProcessed > 0) {
+    const typeParts = filesByType.map((g) => `${g._count.type} ${fileTypeLabel(g.type).replace(/^Archivo /, "").toLowerCase()}`).filter(Boolean);
+    baúlParts.push(`${filesProcessed} archivo(s)${typeParts.length ? ` (${typeParts.join(", ")})` : ""}`);
+  }
+  if (photosProcessed) baúlParts.push(`${photosProcessed} foto(s)`);
+  if (audiosProcessed) baúlParts.push(`${audiosProcessed} audio(s)`);
+  if (videosProcessed) baúlParts.push(`${videosProcessed} vídeo(s)`);
+
+  let text = "";
+  if (totalProcessed > 0) {
+    text += `En el baúl (ya procesados): ${totalProcessed} ítem(s). Desglose: ${baúlParts.join("; ")}.`;
+  }
+  if (totalPending > 0) {
+    const pendParts = [];
+    if (notesPending) pendParts.push(`${notesPending} notas`);
+    if (linksPending) pendParts.push(`${linksPending} enlaces`);
+    if (filesPending) pendParts.push(`${filesPending} archivos`);
+    if (photosPending) pendParts.push(`${photosPending} fotos`);
+    if (audiosPending) pendParts.push(`${audiosPending} audios`);
+    if (videosPending) pendParts.push(`${videosPending} vídeos`);
+    text += (text ? " " : "") + `En la fábrica de ideas (pendientes): ${totalPending} (${pendParts.join(", ")}).`;
+  }
+  if (totalAll > 0) {
+    text += (text ? " " : "") + `Total guardados en la app: ${totalAll} ítem(s).`;
+    const linksTotal = linksProcessed + linksPending;
+    const notesTotal = notesProcessed + notesPending;
+    const filesTotal = filesProcessed + filesPending;
+    if (linksTotal) text += ` Enlaces en total: ${linksTotal}.`;
+    if (notesTotal) text += ` Notas en total: ${notesTotal}.`;
+    if (filesTotal) text += ` Archivos en total: ${filesTotal}.`;
+  }
+  if (favoritesCount) text += (text ? " " : "") + `Favoritos: ${favoritesCount}.`;
+  if (!text) return "La base de datos no tiene aún ítems guardados.";
+  return text.trim();
+}
+
+/**
+ * Recupera contexto de la bóveda con:
+ * 1) Resumen real de la BD (conteos y tipos de archivo, p. ej. "120 PDFs").
+ * 2) Muestra equilibrada por tipo (muchos archivos/PDFs) y búsqueda por palabras clave (incl. tipo y nombre de fichero).
  */
 export async function getChatContext(userMessage) {
-  const keywords = (userMessage || "")
-    .trim()
-    .toLowerCase()
-    .split(/\s+/)
-    .filter((w) => w.length > 2);
+  const messageLower = (userMessage || "").trim().toLowerCase();
+  const keywords = messageLower.split(/\s+/).filter((w) => w.length > 1);
+  const wantsFiles = /\b(pdf|pdfs|documento|documentos|archivo|archivos|fichero|word|excel)\b/.test(messageLower);
 
   const whereProcessed = { inboxStatus: "processed" };
 
-  const [notes, links, files, photos, audios, videos] = await Promise.all([
-    prisma.note.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: 25 }),
-    prisma.link.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: 25 }),
-    prisma.file.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: 25 }),
-    prisma.photo.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: 25 }),
-    prisma.audio.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: 25 }),
-    prisma.video.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: 25 }),
+  const [dbSummary, notes, links, files, photos, audios, videos] = await Promise.all([
+    getDatabaseSummary(),
+    prisma.note.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: PER_KIND_TAKE.note }),
+    prisma.link.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: PER_KIND_TAKE.link }),
+    prisma.file.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: PER_KIND_TAKE.file }),
+    prisma.photo.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: PER_KIND_TAKE.photo }),
+    prisma.audio.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: PER_KIND_TAKE.audio }),
+    prisma.video.findMany({ where: whereProcessed, orderBy: { createdAt: "desc" }, take: PER_KIND_TAKE.video }),
   ]);
 
-  let items = [
-    ...notes.map((n) => ({ ...n, kind: "note", title: null, content: n.content })),
-    ...links.map((l) => ({ ...l, kind: "link", content: null })),
-    ...files.map((f) => ({ ...f, kind: "file", title: null, content: null })),
-    ...photos.map((p) => ({ ...p, kind: "photo", title: null, content: null })),
-    ...audios.map((a) => ({ ...a, kind: "audio", title: null, content: null })),
-    ...videos.map((v) => ({ ...v, kind: "video", content: null })),
-  ]
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 50);
+  const lower = (s) => (s ?? "").toString().toLowerCase();
+  const matchesKeyword = (item) => {
+    const ai = parseAiEnrichment(item.aiEnrichment);
+    const title = lower(ai?.title ?? item.title ?? item.filename ?? item.url);
+    const summary = lower(ai?.summary ?? "");
+    const content = lower(item.content ?? "");
+    const typeStr = lower(item.type ?? "");
+    const filenameStr = lower(item.filename ?? "");
+    const searchable = `${title} ${summary} ${content} ${typeStr} ${filenameStr}`;
+    return keywords.some((k) => searchable.includes(k));
+  };
+
+  let noteItems = notes.map((n) => ({ ...n, kind: "note", title: null, content: n.content }));
+  let linkItems = links.map((l) => ({ ...l, kind: "link", content: null }));
+  let fileItems = files.map((f) => ({ ...f, kind: "file", title: null, content: null }));
+  let photoItems = photos.map((p) => ({ ...p, kind: "photo", title: null, content: null }));
+  let audioItems = audios.map((a) => ({ ...a, kind: "audio", title: null, content: null }));
+  let videoItems = videos.map((v) => ({ ...v, kind: "video", content: null }));
 
   if (keywords.length > 0) {
-    const lower = (s) => (s ?? "").toString().toLowerCase();
-    const matchesKeyword = (item) => {
-      const ai = parseAiEnrichment(item.aiEnrichment);
-      const title = lower(ai?.title ?? item.title ?? item.filename ?? item.url);
-      const summary = lower(ai?.summary ?? "");
-      const content = lower(item.content ?? "");
-      const text = `${title} ${summary} ${content}`;
-      return keywords.some((k) => text.includes(k));
-    };
-    const filtered = items.filter(matchesKeyword);
-    if (filtered.length > 0) items = filtered;
+    const filterKind = (arr) => (arr.length > 0 && arr.some(matchesKeyword) ? arr.filter(matchesKeyword) : arr);
+    noteItems = filterKind(noteItems);
+    linkItems = filterKind(linkItems);
+    fileItems = filterKind(fileItems);
+    photoItems = filterKind(photoItems);
+    audioItems = filterKind(audioItems);
+    videoItems = filterKind(videoItems);
   }
 
-  items = items.slice(0, MAX_CONTEXT_ITEMS);
-  const contextText = items.map(toContextLine).join("\n\n");
-  const catalog = items.map(toCatalogItem);
+  // Muestra equilibrada: priorizar archivos si el usuario pregunta por PDFs/documentos
+  const cap = (arr, n) => arr.slice(0, n);
+  const fileCap = wantsFiles ? Math.min(fileItems.length, 40) : Math.min(fileItems.length, 25);
+  const noteCap = Math.min(noteItems.length, 18);
+  const linkCap = Math.min(linkItems.length, 18);
+  const restCap = 8;
+  const balanced = [
+    ...cap(noteItems, noteCap),
+    ...cap(linkItems, linkCap),
+    ...cap(fileItems, fileCap),
+    ...cap(photoItems, restCap),
+    ...cap(audioItems, restCap),
+    ...cap(videoItems, restCap),
+  ].slice(0, MAX_ITEMS_TOTAL);
+
+  const contextText =
+    `=== RESUMEN DE LA BASE DE DATOS (conteos reales) ===\n${dbSummary}\n\n=== MUESTRA DE CONTENIDO (título y resumen por ítem) ===\n` +
+    balanced.map(toContextLine).join("\n\n");
+  const catalog = balanced.map(toCatalogItem);
   return { contextText, catalog };
 }
 
@@ -182,28 +300,80 @@ function extractJsonFromResponse(raw) {
 }
 
 /**
- * Responde con Gemini usando el contexto completo de la app (bóveda, calendario, temas, pendientes).
- * Devuelve { message }.
+ * Parsea el texto de la respuesta desde el formato de Azure Responses API.
+ * response.output[] -> type "message" -> content[] -> type "output_text" -> text
  */
-export async function getRickyBrainReply(userMessage) {
-  if (!geminiModel) throw new Error("GEMINI_API_KEY no configurada");
+function parseAzureResponsesOutput(data) {
+  const output = data?.output;
+  if (!Array.isArray(output)) return null;
+  for (const item of output) {
+    if (item?.type === "message" && Array.isArray(item.content)) {
+      for (const block of item.content) {
+        if (block?.type === "output_text" && typeof block.text === "string") {
+          return block.text.trim();
+        }
+      }
+    }
+  }
+  return null;
+}
 
-  const { vault, calendarText, topicsText, pendingText } = await getFullAppContext(userMessage);
+/**
+ * Llama a Azure OpenAI Responses API (gpt-5.1-chat). Devuelve el texto de la respuesta o null si falla.
+ */
+async function getAzureChatReply(promptFinal) {
+  if (!isAzureChatConfigured) return null;
+  const res = await fetch(AZURE_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "api-key": AZURE_CHAT_API_KEY,
+    },
+    body: JSON.stringify({
+      model: AZURE_CHAT_MODEL,
+      input: promptFinal,
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Azure Responses API ${res.status}: ${errText.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const text = parseAzureResponsesOutput(data);
+  if (!text) throw new Error("Respuesta de Azure sin output_text");
+  return text;
+}
 
-  const systemDescription = `Eres Riki Brain, el asistente del Cerebro Digital. Tienes acceso al contexto completo de la aplicación del usuario:
+/**
+ * Responde con Gemini usando el contexto completo de la app. Devuelve el texto en bruto de la respuesta.
+ */
+async function getGeminiChatReply(promptFinal) {
+  if (!geminiModel) return null;
+  const result = await geminiModel.generateContent(promptFinal);
+  const response = result.response;
+  if (!response?.text) throw new Error("Respuesta vacía de Gemini");
+  return response.text();
+}
 
-1) BAÚL (contenido ya procesado): notas, enlaces, archivos, fotos, audios y vídeos con título y resumen.
-2) CALENDARIO: eventos detectados automáticamente o añadidos por el usuario.
-3) TEMAS: resúmenes agrupados por tema con cantidad de ítems.
-4) FÁBRICA DE IDEAS: ítems pendientes de procesar (notas, enlaces, archivos, etc.).
+/**
+ * Construye el prompt completo (sistema + contexto + usuario) para el chat.
+ */
+function buildChatPrompt(vault, calendarText, topicsText, pendingText, userMessage) {
+  const systemDescription = `Eres Riki Brain, el asistente del Cerebro Digital. Tienes el contexto real de la aplicación:
 
-Usa este contexto para responder: resume, busca, sugiere ("tienes una nota sobre X", "en tu calendario tienes...", "el tema Y agrupa..."). Si preguntan por algo que no está en el contexto, dilo con naturalidad. Responde en el mismo idioma que el usuario. Sé conciso y amigable.`;
+1) RESUMEN DE LA BASE DE DATOS: conteos reales. Incluye (a) baúl = ya procesados, (b) fábrica de ideas = pendientes, (c) total guardados y "Enlaces en total", "Notas en total", "Archivos en total". Cuando pregunten "cuántos enlaces tengo" usa el total (baúl + pendientes), no solo el baúl.
+2) MUESTRA DE CONTENIDO: una selección de ítems con título y resumen. Es solo una muestra; el total real está en el resumen. No digas "no hay PDFs" si en el resumen aparece que hay muchos PDFs.
+3) CALENDARIO: eventos.
+4) TEMAS: resúmenes por tema con cantidad de ítems.
+5) FÁBRICA DE IDEAS: pendientes de procesar.
+
+Usa siempre el resumen para dar cifras correctas ("tienes X PDFs", "hay Y notas"). Si preguntan por documentos o PDFs, confía en el desglose del resumen. Responde en el mismo idioma que el usuario. Sé conciso y amigable.`;
 
   const contextBlock = `
---- CONTEXTO ACTUAL DE LA APP ---
+--- CONTEXTO COMPLETO DE LA APP (base de datos + muestra) ---
 
-**Baúl (últimos ítems procesados):**
-${vault.contextText || "Ningún ítem procesado aún."}
+${vault.contextText || "Ningún ítem en la base de datos."}
 
 **Calendario:**
 ${calendarText}
@@ -215,19 +385,47 @@ ${topicsText}
 ${pendingText}
 --- FIN CONTEXTO ---`;
 
-  const promptFinal = `${systemDescription}
+  return `${systemDescription}
 ${contextBlock}
 
 El usuario dice: "${userMessage}"
 
 Responde ÚNICAMENTE con un JSON válido (nada más, sin markdown ni texto extra):
 {"message": "Tu respuesta aquí"}`;
+}
 
-  const result = await geminiModel.generateContent(promptFinal);
-  const response = result.response;
-  if (!response?.text) throw new Error("Respuesta vacía de Gemini");
+/**
+ * Responde al usuario: principal Azure (gpt-5.1-chat), fallback Gemini.
+ * Devuelve { message }.
+ */
+export async function getRickyBrainReply(userMessage) {
+  if (!isAzureChatConfigured && !geminiModel) {
+    throw new Error("Configura AZURE_CHAT_API_KEY y AZURE_CHAT_RESPONSES_URL, o GEMINI_API_KEY en .env");
+  }
 
-  const raw = response.text();
+  const { vault, calendarText, topicsText, pendingText } = await getFullAppContext(userMessage);
+  const promptFinal = buildChatPrompt(vault, calendarText, topicsText, pendingText, userMessage);
+
+  let raw = null;
+  let usedAzure = false;
+
+  if (isAzureChatConfigured) {
+    try {
+      raw = await getAzureChatReply(promptFinal);
+      usedAzure = true;
+    } catch (err) {
+      console.warn("[Chat] Azure Responses API falló, usando Gemini:", err.message);
+    }
+  }
+
+  if (raw == null && geminiModel) {
+    raw = await getGeminiChatReply(promptFinal);
+  }
+
+  if (raw == null || !raw.trim()) {
+    throw new Error("No se pudo obtener respuesta del chat. Revisa la configuración de Azure o Gemini.");
+  }
+
   const jsonStr = extractJsonFromResponse(raw);
   try {
     const parsed = JSON.parse(jsonStr);
@@ -239,5 +437,5 @@ Responde ÚNICAMENTE con un JSON válido (nada más, sin markdown ni texto extra
 }
 
 export function isChatEnabled() {
-  return !!GEMINI_API_KEY;
+  return isAzureChatConfigured || !!GEMINI_API_KEY;
 }

@@ -14,8 +14,8 @@ const router = Router();
 router.post("/chat", async (req, res) => {
   if (!isChatEnabled()) {
     return res.status(503).json({
-      reply: "Chat no disponible. Configura GEMINI_API_KEY en el servidor.",
-      message: "Chat no disponible. Configura GEMINI_API_KEY en el servidor.",
+      reply: "Chat no disponible. Configura AZURE_CHAT_API_KEY y AZURE_CHAT_RESPONSES_URL, o GEMINI_API_KEY en .env.",
+      message: "Chat no disponible. Configura AZURE_CHAT_API_KEY y AZURE_CHAT_RESPONSES_URL, o GEMINI_API_KEY en .env.",
     });
   }
   const body = req.body || {};
