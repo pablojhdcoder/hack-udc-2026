@@ -2,7 +2,7 @@
   <img src="icon.svg" alt="Digital Brain logo" width="120" />
 </p>
 
-# 🧠 Digital Brain — Kelea HackUDC 2026
+# 🧠 Riki Brain — Kelea HackUDC 2026
 
 Sistema de documentación personal: captura rápida en un **inbox único** y procesado posterior a conocimiento en Markdown.
 
