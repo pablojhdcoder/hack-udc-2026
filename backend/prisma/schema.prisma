@@ -72,6 +72,7 @@ model Video {
   type           String   // mp4, webm, youtube_downloaded, ...
   duration       Int?     // segundos
   title          String?
+  transcription  String?  // transcripción del audio del vídeo (via Whisper)
   aiEnrichment   String?  // JSON: { title, summary, topics, language, category, enrichedAt }
   createdAt      DateTime @default(now())
   inboxStatus    String   @default("pending")

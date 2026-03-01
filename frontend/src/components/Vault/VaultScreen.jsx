@@ -917,10 +917,18 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
                     </div>
                   </div>
 
-                  {/* Transcripción (solo audio) */}
+                  {/* Transcripción (audio y vídeo) */}
                   {(selectedItem.kind === "audio" || selectedItem.sourceKind === "audio") && selectedItem.transcription && (
                     <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 px-4 py-3">
                       <p className="text-xs text-amber-600 dark:text-amber-400 font-medium uppercase tracking-wider mb-1.5">🎙 {vt.transcription ?? "Transcripción"}</p>
+                      <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed whitespace-pre-wrap">
+                        {selectedItem.transcription}
+                      </p>
+                    </div>
+                  )}
+                  {(selectedItem.kind === "video" || selectedItem.sourceKind === "video") && selectedItem.transcription && (
+                    <div className="rounded-xl bg-violet-50 dark:bg-violet-500/10 border border-violet-200 dark:border-violet-500/20 px-4 py-3">
+                      <p className="text-xs text-violet-600 dark:text-violet-400 font-medium uppercase tracking-wider mb-1.5">🎬 {vt.transcription ?? "Transcripción"}</p>
                       <p className="text-sm text-zinc-800 dark:text-neutral-200 leading-relaxed whitespace-pre-wrap">
                         {selectedItem.transcription}
                       </p>

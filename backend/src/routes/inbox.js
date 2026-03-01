@@ -158,7 +158,8 @@ async function runPhotoEnrichment(id, filePath, type, filename) {
 async function runVideoEnrichment(id, filePath, filename, type) {
   try {
     const enrichment = await enrichVideo(filePath, filename, type);
-    await saveEnrichment(prisma.video, id, enrichment);
+    await saveEnrichment(prisma.video, id, enrichment, "transcription");
+    console.log(`[AI] Vídeo ${id} enriquecido correctamente.`);
   } catch (err) {
     console.error(`[AI] Error enriqueciendo vídeo ${id}:`, err.message);
     await saveEnrichment(prisma.video, id, { error: err.message, enrichedAt: new Date().toISOString() });
@@ -779,7 +780,7 @@ router.get("/processed/recent", async (req, res) => {
       ...files.map((item) => ({ kind: "file", id: item.id, title: toItemTitle(item, "file"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...photos.map((item) => ({ kind: "photo", id: item.id, title: toItemTitle(item, "photo"), filename: item.filename, filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, ...normalizeAIEnrichment(item.aiEnrichment) })),
       ...audios.map((item) => ({ kind: "audio", id: item.id, title: toItemTitle(item, "audio"), filename: item.filename || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Audio", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, durationSeconds: item.duration ?? 0, transcription: item.transcription ?? null, ...normalizeAIEnrichment(item.aiEnrichment) })),
-      ...videos.map((item) => { const thumbFile = `thumb_${item.id}.jpg`; const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile)); return { kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, thumbnailUrl: thumbExists ? `/api/uploads/${thumbFile}` : null, ...normalizeAIEnrichment(item.aiEnrichment) }; }),
+      ...videos.map((item) => { const thumbFile = `thumb_${item.id}.jpg`; const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile)); return { kind: "video", id: item.id, title: toItemTitle(item, "video"), filename: item.title || parseAI(item.aiEnrichment)?.title || path.basename(item.filePath || "") || "Vídeo", filePath: item.filePath, processedPath: item.processedPath, createdAt: item.createdAt, transcription: item.transcription ?? null, thumbnailUrl: thumbExists ? `/api/uploads/${thumbFile}` : null, ...normalizeAIEnrichment(item.aiEnrichment) }; }),
     ]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, limit);
@@ -842,7 +843,7 @@ router.get("/by-kind/:kind", async (req, res) => {
         const thumbFile = `thumb_${item.id}.jpg`;
         const thumbExists = fs.existsSync(path.join(process.cwd(), "uploads", thumbFile));
         const thumbnailUrl = thumbExists ? `/api/uploads/${thumbFile}` : null;
-        return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0, thumbnailUrl };
+        return { ...base, filename: item.title || ai.aiTitle || path.basename(item.filePath || "") || "Vídeo", type: item.type, filePath: item.filePath, durationSeconds: item.duration ?? 0, transcription: item.transcription ?? null, thumbnailUrl };
       }
       return base;
     });
@@ -1026,6 +1027,7 @@ router.get("/", async (req, res) => {
             ...base,
             filePath: item.filePath,
             title: item.title,
+            transcription: item.transcription ?? null,
             durationSeconds: item.duration ?? 0,
           };
         return base;

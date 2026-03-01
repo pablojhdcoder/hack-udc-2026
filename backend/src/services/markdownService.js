@@ -90,8 +90,11 @@ export function buildMarkdownContent(item) {
     bodyParts.push("");
   }
 
-  // Transcripción (audio): IA o campo guardado en BD
-  const transcriptionText = ai?.transcription ?? (item.kind === "audio" ? item.content : null);
+  // Transcripción (audio y vídeo): IA o campo guardado en BD
+  const transcriptionText =
+    ai?.transcription ??
+    (item.kind === "audio" ? item.content : null) ??
+    (item.kind === "video" ? item.transcription : null);
   if (transcriptionText) {
     bodyParts.push("## Transcripción", "", transcriptionText, "");
   }

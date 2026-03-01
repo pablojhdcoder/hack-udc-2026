@@ -93,7 +93,9 @@ async function ensureEnrichment(kind, id, entity) {
         const absolutePath = resolveFilePath(entity.filePath);
         const filename = path.basename(entity.filePath);
         enrichment = await enrichVideo(absolutePath, filename, entity.type);
-        await prisma.video.update({ where: { id }, data: enrichmentPayload(enrichment) });
+        const videoPayload = enrichmentPayload(enrichment);
+        if (enrichment.transcription) videoPayload.transcription = enrichment.transcription;
+        await prisma.video.update({ where: { id }, data: videoPayload });
         break;
       }
       default:
@@ -220,6 +222,7 @@ export async function getEntityByKindId(kind, id) {
         title: ai?.title ?? video.title ?? "Vídeo",
         type: video.type,
         filePath: video.filePath,
+        transcription: video.transcription?.trim() ? video.transcription : null,
         aiEnrichment: ai,
         createdAt: video.createdAt,
       };
