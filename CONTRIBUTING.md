@@ -42,8 +42,9 @@ npm run dev     # levanta backend (3001) y frontend (5173) en paralelo
 cd backend
 cp .env.example .env   # rellena las variables necesarias
 npm install
+npx prisma generate
 npm run db:push        # crea/actualiza el esquema SQLite
-npm run dev            # node --watch src/index.js
+npm run dev            # nodemon (hot-reload)
 ```
 
 API disponible en `http://localhost:3001`.
@@ -70,7 +71,7 @@ App disponible en `http://localhost:5173`. El proxy de Vite reenvía `/api` al b
 
 | Script | Descripción |
 |---|---|
-| `npm run dev` | Servidor con hot-reload (`node --watch`) |
+| `npm run dev` | Servidor con hot-reload (nodemon) |
 | `npm start` | Servidor sin hot-reload |
 | `npm run db:push` | Sincroniza el esquema Prisma con la BD |
 | `npm run db:migrate` | Crea una migración con nombre |
@@ -121,36 +122,47 @@ hack-udc-2026/
 │   │   ├── routes/
 │   │   │   ├── inbox.js        # GET/POST /api/inbox, favoritos, novedades…
 │   │   │   ├── process.js      # POST /api/process
-│   │   │   ├── knowledge.js    # GET /api/knowledge — explorador de Markdown
-│   │   │   └── search.js       # GET /api/search
+│   │   │   ├── search.js       # GET /api/search
+│   │   │   ├── chat.js         # POST /api/chat — Riki Brain
+│   │   │   ├── eventos.js      # GET/POST/DELETE /api/eventos — calendario
+│   │   │   └── topics.js       # GET /api/topics — temas y resúmenes
 │   │   └── services/
-│   │       ├── aiService.js          # GPT-4o + Whisper (Azure OpenAI)
-│   │       ├── classifyService.js    # Heurísticas para clasificar entradas
-│   │       ├── fileExtractService.js # Extracción de texto de PDF/Word/imágenes
-│   │       ├── linkPreviewService.js # Metadatos Open Graph
+│   │       ├── aiService.js          # GPT-4o + Whisper (Azure OpenAI), Gemini fallback
+│   │       ├── chatService.js         # Chat con contexto (Azure Responses API + Gemini)
+│   │       ├── classifyService.js    # Heurísticas y análisis de texto/URLs
+│   │       ├── fileExtractService.js  # Extracción de texto de PDF/Word/imágenes
+│   │       ├── linkPreviewService.js # Firecrawl + Open Graph
 │   │       ├── markdownService.js    # Escritura de .md en knowledge/
-│   │       └── processService.js     # Orquestación del pipeline de procesado
-│   ├── knowledge/              # Salida Markdown (compatible con Obsidian)
-│   └── uploads/                # Ficheros subidos — NO subir a Git
+│   │       ├── processService.js     # Orquestación del pipeline de procesado
+│   │       └── searchService.js      # Búsqueda en el baúl
+│   ├── knowledge/              # Salida Markdown (notas/, enlaces/, archivos/, etc.)
+│   ├── uploads/                # Ficheros subidos — NO subir a Git
+│   ├── .env.example
+│   └── .env                    # No subir a Git
 └── frontend/
+    ├── index.html
     ├── vite.config.js          # Proxy /api → http://localhost:3001
     └── src/
-        ├── App.jsx
-        ├── main.jsx
+        ├── App.jsx, main.jsx, index.css
         ├── api/
         │   └── client.js       # Cliente HTTP hacia /api
-        └── components/
-            ├── Inbox/          # Pantalla principal de captura
-            │   ├── InboxCard.jsx
-            │   ├── InboxList.jsx
-            │   ├── FooterCapture.jsx
-            │   ├── FilterBottomSheet.jsx
-            │   ├── Header.jsx
-            │   ├── Sidebar.jsx
-            │   └── cards/      # FileCard, LinkCard, TextNoteCard, VoiceNoteCard
-            ├── Process/        # Flujo de aprobación y procesado
-            ├── Vault/          # Explorador de knowledge
-            └── Settings/
+        ├── components/
+        │   ├── Inbox/          # Pantalla principal de captura
+        │   │   ├── InboxCard.jsx, InboxList.jsx
+        │   │   ├── FooterCapture.jsx, FilterBottomSheet.jsx
+        │   │   ├── Header.jsx, Sidebar.jsx, EmptyState.jsx
+        │   │   └── cards/      # FileCard, LinkCard, TextNoteCard, VoiceNoteCard
+        │   ├── Process/        # ProcessScreen — flujo de aprobación y procesado
+        │   ├── Vault/          # VaultScreen, ItemDetailPanel, FileSearchList
+        │   ├── Calendario/     # CalendarioView
+        │   ├── Temas/          # TemasView
+        │   ├── Settings/       # SettingsScreen, CentroAyudaView, LanguageBottomSheet
+        │   ├── Layout/         # MobileFrame
+        │   └── shared/        # FilePreview
+        ├── context/            # LanguageContext
+        ├── i18n/               # translations.js
+        ├── data/               # mockInbox.js
+        ├── lib/, utils/
 ```
 
 ---

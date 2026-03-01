@@ -19,16 +19,34 @@ Sistema de documentación personal: captura rápida en un **inbox único** y pro
 
 ```
 hack-udc-2026/
-├── backend/          # API REST + Prisma
-│   ├── prisma/       # esquema y migraciones
+├── backend/              # API REST + Prisma
+│   ├── prisma/           # schema.prisma, dev.db (SQLite)
 │   ├── src/
-│   │   ├── routes/   # inbox, process, knowledge, search
-│   │   └── services/ # aiService, markdownService…
-│   └── knowledge/    # Salida Markdown
-└── frontend/         # React (Vite)
+│   │   ├── index.js      # Servidor Express
+│   │   ├── routes/       # inbox, process, search, chat, eventos, topics
+│   │   ├── services/     # aiService, chatService, classifyService, linkPreviewService,
+│   │   │                 # markdownService, processService, searchService, fileExtractService
+│   │   ├── middleware/   # upload (multer)
+│   │   └── lib/          # prisma.js
+│   ├── uploads/          # Archivos subidos (se crea al usar)
+│   ├── knowledge/       # Markdown generado al procesar (notas/, enlaces/, archivos/, etc.)
+│   ├── .env.example
+│   └── .env              # No subir a Git
+└── frontend/             # React (Vite)
+    ├── index.html
+    ├── vite.config.js    # Proxy /api → backend:3001
     └── src/
-        ├── components/
-        └── api/      # cliente HTTP
+        ├── App.jsx, main.jsx, index.css
+        ├── api/           # client.js (getInbox, processItems, chat, favoritos…)
+        ├── components/    # Inbox, Vault, Process, Calendario, Temas, Settings, Layout
+        │   ├── Inbox/     # Header, Sidebar, FooterCapture, InboxList, cards/
+        │   ├── Vault/     # VaultScreen, ItemDetailPanel, FileSearchList
+        │   ├── Process/   # ProcessScreen
+        │   ├── Calendario/, Temas/, Settings/, Layout/, shared/
+        ├── context/       # LanguageContext
+        ├── i18n/          # translations.js
+        ├── data/          # mockInbox.js
+        ├── lib/, utils/
 ```
 
 ## Requisitos
@@ -41,10 +59,12 @@ hack-udc-2026/
 
 ### ⭐ Opción 1 — Todo desde la raíz (recomendado)
 
+Copia `backend/.env.example` a `backend/.env` (y rellena las variables que necesites). Luego:
+
 ```bash
 npm run setup && npm run dev
 ```
-Instala dependencias, inicializa la BD y arranca backend + frontend con hot reload.
+Instala dependencias, genera el cliente Prisma, inicializa la BD y arranca backend + frontend con hot reload.
 
 ### Opción 2 — Por separado
 
@@ -54,6 +74,7 @@ Instala dependencias, inicializa la BD y arranca backend + frontend con hot relo
 cd backend
 cp .env.example .env
 npm install
+npx prisma generate
 npm run db:push
 npm run dev
 ```

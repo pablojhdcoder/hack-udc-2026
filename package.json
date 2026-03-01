@@ -2,7 +2,7 @@
   "name": "hack-udc-2026",
   "private": true,
   "scripts": {
-    "setup": "npm install && cd backend && npm install && npx prisma db push && cd ../frontend && npm install && cd ..",
+    "setup": "npm install && cd backend && npm install && npx prisma generate && npx prisma db push && cd ../frontend && npm install && cd ..",
     "dev": "concurrently -n backend,frontend -c blue,yellow \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm run dev",
