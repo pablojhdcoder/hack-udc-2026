@@ -11,6 +11,7 @@ export default function FooterCapture({
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [sending, setSending] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null); // { done, total }
   const [recording, setRecording] = useState(false);
   const [recordingError, setRecordingError] = useState(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -233,15 +234,20 @@ export default function FooterCapture({
   };
 
   const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !onAdd) return;
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length || !onAdd) return;
     setSending(true);
+    if (files.length > 1) setUploadProgress({ done: 0, total: files.length });
     try {
-      await onAdd({ file });
+      for (let i = 0; i < files.length; i++) {
+        await onAdd({ file: files[i] });
+        if (files.length > 1) setUploadProgress({ done: i + 1, total: files.length });
+      }
     } catch {
       // error en App
     } finally {
       setSending(false);
+      setUploadProgress(null);
       e.target.value = "";
     }
   };
@@ -253,6 +259,7 @@ export default function FooterCapture({
         type="file"
         className="hidden"
         accept="*/*"
+        multiple
         onChange={handleFileChange}
         aria-hidden
       />
@@ -301,6 +308,17 @@ export default function FooterCapture({
                 <span className="w-6 h-6 rounded-full border-2 border-zinc-400 border-t-transparent animate-spin" />
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {uploadProgress && (
+        <div className="flex justify-center px-4 pt-2 pb-0">
+          <div className="flex items-center gap-2 rounded-xl bg-zinc-100 dark:bg-neutral-800 border border-zinc-200 dark:border-neutral-700 px-4 py-2 text-sm text-zinc-600 dark:text-zinc-300">
+            <Loader2 className="w-4 h-4 animate-spin text-brand-500 shrink-0" />
+            <span>
+              {t("common.uploadingFiles", { done: uploadProgress.done, total: uploadProgress.total })}
+            </span>
           </div>
         </div>
       )}
