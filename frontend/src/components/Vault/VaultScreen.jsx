@@ -159,6 +159,11 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   const searchInputRef = useRef(null);
   const lastOpenedKeyRef = useRef(null);
   const initialAppliedRef = useRef(false);
+  const [panelDragY, setPanelDragY] = useState(0);
+  const [isDraggingPanel, setIsDraggingPanel] = useState(false);
+  const dragStartY = useRef(0);
+  const panelDragYRef = useRef(0);
+  const getReleaseY = (e) => (e.changedTouches ? e.changedTouches[0].clientY : e.clientY);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -276,7 +281,10 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   }, []);
 
   useEffect(() => {
-    if (selectedItem) setShowDeleteConfirm(false);
+    if (selectedItem) {
+      setShowDeleteConfirm(false);
+      setPanelDragY(0);
+    }
   }, [selectedItem]);
 
   useEffect(() => {
@@ -457,6 +465,54 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
       window.open(`/api/uploads/${basename}`, "_blank", "noopener,noreferrer");
     }
   }, [selectedItem, selectedKind, load]);
+
+  const getClientY = (e) => (e.touches ? e.touches[0].clientY : e.clientY);
+
+  const handlePanelDragStart = useCallback((e) => {
+    e.preventDefault();
+    dragStartY.current = getClientY(e);
+    setPanelDragY(0);
+    setIsDraggingPanel(true);
+  }, []);
+
+  const handlePanelDragMove = useCallback((e) => {
+    const y = getClientY(e);
+    const dy = y - dragStartY.current;
+    const next = Math.max(0, dy);
+    panelDragYRef.current = next;
+    setPanelDragY(next);
+  }, []);
+
+  const handlePanelDragEnd = useCallback((e) => {
+    const releaseY = typeof e !== "undefined" && e !== null ? getReleaseY(e) : null;
+    setIsDraggingPanel(false);
+    setPanelDragY(0);
+    const mid = typeof window !== "undefined" ? window.innerHeight / 2 : 400;
+    const inLowerHalf = releaseY != null && releaseY >= mid;
+    if (inLowerHalf) {
+      setSelectedItem(null);
+      setShowDeleteConfirm(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDraggingPanel) return;
+    const onMove = (e) => {
+      e.preventDefault();
+      handlePanelDragMove(e);
+    };
+    const onEnd = (ev) => handlePanelDragEnd(ev);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onEnd);
+    document.addEventListener("mousemove", handlePanelDragMove);
+    document.addEventListener("mouseup", onEnd);
+    return () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("mousemove", handlePanelDragMove);
+      document.removeEventListener("mouseup", onEnd);
+    };
+  }, [isDraggingPanel, handlePanelDragMove, handlePanelDragEnd]);
 
   return (
     <div className="h-full min-h-0 flex flex-col overflow-hidden bg-white dark:bg-neutral-900">
@@ -767,7 +823,8 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
           }}
         >
           <div
-            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl overflow-y-auto max-h-[85vh] scrollbar-hide"
+            className="w-full max-w-md rounded-t-2xl bg-white dark:bg-neutral-900 p-4 pb-safe shadow-xl overflow-y-auto max-h-[85vh] scrollbar-hide transition-transform"
+            style={{ transform: `translateY(${panelDragY}px)` }}
             onClick={(e) => e.stopPropagation()}
           >
             {showDeleteConfirm ? (
@@ -796,8 +853,15 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
               </>
             ) : (
               <>
-                {/* Handle */}
-                <div className="w-10 h-1 bg-zinc-200 dark:bg-neutral-700 rounded-full mx-auto mb-4" />
+                {/* Barra para arrastrar y cerrar */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="w-12 h-1.5 bg-zinc-300 dark:bg-neutral-600 rounded-full mx-auto mb-4 touch-none cursor-grab active:cursor-grabbing select-none"
+                  aria-label="Arrastra hacia abajo para cerrar"
+                  onTouchStart={handlePanelDragStart}
+                  onMouseDown={handlePanelDragStart}
+                />
 
                 {/* Título */}
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-white leading-snug mb-4">
