@@ -1,24 +1,15 @@
 /**
- * chat.js — Chat Ricky Brain. LLM extrae message + searchQuery; la búsqueda se hace con runVaultSearch.
+ * chat.js — Chat Ricky Brain conversacional (sin búsqueda RAG).
  *
  * POST /api/chat
  * Body:    { message?: string, messages?: Array<{ role, content }> }
- * Response: { message: string, reply: string, searchQuery?: string | null, localResults?: Array<{ id, kind, title }> }
+ * Response: { message: string, reply: string }
  */
 
 import { Router } from "express";
 import { getRickyBrainReply, isChatEnabled } from "../services/chatService.js";
-import { runVaultSearch } from "../services/searchService.js";
 
 const router = Router();
-
-function toChatResultItem(item) {
-  return {
-    id: String(item.id),
-    kind: item.kind || "note",
-    title: String(item.title ?? item.aiTitle ?? item.filename ?? "Sin título"),
-  };
-}
 
 router.post("/chat", async (req, res) => {
   if (!isChatEnabled()) {
@@ -43,27 +34,8 @@ router.post("/chat", async (req, res) => {
     return res.status(400).json({ reply: "Se requiere un mensaje.", message: "Se requiere un mensaje." });
   }
   try {
-    const { message: replyText, searchQuery } = await getRickyBrainReply(lastUserMessage);
-
-    let localResults = [];
-    if (searchQuery && typeof searchQuery === "string") {
-      const raw = searchQuery.trim();
-      if (raw) {
-        try {
-          const hits = await runVaultSearch(raw);
-          localResults = hits.map(toChatResultItem);
-        } catch (searchErr) {
-          console.error("[chat] runVaultSearch", searchErr);
-        }
-      }
-    }
-
-    res.json({
-      reply: replyText,
-      message: replyText,
-      searchQuery: searchQuery ?? null,
-      localResults,
-    });
+    const { message: replyText } = await getRickyBrainReply(lastUserMessage);
+    res.json({ reply: replyText, message: replyText });
   } catch (err) {
     console.error("[chat]", err);
     res.status(500).json({

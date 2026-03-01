@@ -27,14 +27,18 @@ function parseAI(raw) {
   }
 }
 
+const STOP_WORDS = [
+  "para", "como", "sobre", "esto", "este", "notas", "archivos", "ficheros", "dame", "busca",
+  "las", "los", "una", "uno", "que", "del", "con", "por", "sus", "todos",
+];
+
 /**
- * Tokens de búsqueda significativos: longitud > 3 para ignorar "de", "con", etc.
- * Si no queda ninguno, se usan todos los tokens (mínimo longitud 1).
+ * Tokens de búsqueda significativos: longitud > 3 y no stop-words.
+ * Si no queda ninguno, devuelve array vacío (búsqueda AND estricta: sin términos válidos = no match).
  */
 function getSearchTerms(normalizedQuery) {
   const all = normalizedQuery.split(/\s+/).filter(Boolean);
-  const significant = all.filter((t) => t.length > 3);
-  return significant.length > 0 ? significant : all;
+  return all.filter((t) => t.length > 3 && !STOP_WORDS.includes(t));
 }
 
 /**
@@ -52,19 +56,14 @@ function buildSearchableText(item) {
 }
 
 /**
- * Comprueba si el ítem coincide con la búsqueda: al menos un término de búsqueda
- * está incluido en el texto buscable (normalizado) del ítem, o coincide por palabra
- * (p. ej. "cita" en la nota con término "citas").
+ * Comprueba si el ítem coincide con la búsqueda: AND estricto.
+ * Todos los términos de búsqueda deben estar incluidos en el texto buscable (normalizado).
+ * Si no hay términos válidos, devuelve false (evita falsos positivos).
  */
 function itemMatchesNormalizedSearch(item, searchTerms) {
-  if (!searchTerms.length) return true;
+  if (searchTerms.length === 0) return false;
   const searchableText = buildSearchableText(item);
-  const words = searchableText.split(/\s+/).filter(Boolean);
-  return searchTerms.some(
-    (term) =>
-      searchableText.includes(term) ||
-      words.some((word) => word.includes(term) || term.includes(word))
-  );
+  return searchTerms.every((term) => searchableText.includes(term));
 }
 
 function matchesAllowedFields(tokens, fields) {
@@ -198,6 +197,8 @@ export async function runVaultSearch(raw, kind = null) {
 
   const normalizedQuery = normalizeText(rawInput);
   const searchTerms = getSearchTerms(normalizedQuery);
+
+  if (normalizedQuery && searchTerms.length === 0) return [];
 
   const q = normalizedQuery;
   const singleKind = kind && VALID_KINDS.includes(kind) ? kind : null;

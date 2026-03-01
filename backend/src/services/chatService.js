@@ -100,30 +100,16 @@ function extractJsonFromResponse(raw) {
 }
 
 /**
- * Responde con Gemini. El LLM solo extrae intención: mensaje conversacional y query de búsqueda (o null).
- * La búsqueda real se ejecuta en el backend con runVaultSearch y se devuelve como localResults.
- * Devuelve { message, searchQuery } (searchQuery es string o null).
+ * Responde con Gemini. Chat conversacional puro (sin búsqueda RAG).
+ * Devuelve { message }.
  */
 export async function getRickyBrainReply(userMessage) {
   if (!geminiModel) throw new Error("GEMINI_API_KEY no configurada");
 
-  const promptFinal = `Eres Riki Brain, el asistente de Cerebro Digital.
+  const promptFinal = `Eres Riki Brain, el asistente inteligente del Cerebro Digital. Responde de forma amigable, natural y concisa a las preguntas del usuario.
 
-TU SALIDA DEBE SER UN JSON ESTRICTO (nada más que el JSON):
-{
-  "message": "Tu respuesta conversacional",
-  "searchQuery": "palabra clave o null"
-}
-
-REGLAS:
-- "message": responde de forma natural. Si el usuario saluda o charla, responde amigable sin buscar archivos. Si pide buscar algo, escribe un mensaje corto tipo "Buscando tus notas sobre X...".
-- "searchQuery": solo pon una palabra o frase de búsqueda (ej. "medicina", "GStreamer") cuando el usuario pida explícitamente buscar archivos/notas en su baúl. En saludos, preguntas genéricas o chit-chat, devuelve null.
-
-EJEMPLOS:
-Usuario: "Hola" -> {"message": "¡Hola! ¿En qué te ayudo?", "searchQuery": null}
-Usuario: "¿Qué tal?" -> {"message": "Muy bien, gracias. ¿En qué puedo ayudarte hoy?", "searchQuery": null}
-Usuario: "Pásame mis apuntes de medicina" -> {"message": "Buscando tus notas sobre medicina...", "searchQuery": "medicina"}
-Usuario: "¿Tengo algo guardado sobre GStreamer?" -> {"message": "Buscando en tu baúl sobre GStreamer...", "searchQuery": "GStreamer"}
+Tu respuesta debe ser ÚNICAMENTE un JSON con este formato (nada más):
+{"message": "Tu respuesta aquí"}
 
 Pregunta del usuario: "${userMessage}"`;
 
@@ -136,16 +122,9 @@ Pregunta del usuario: "${userMessage}"`;
   try {
     const parsed = JSON.parse(jsonStr);
     const message = typeof parsed.message === "string" ? parsed.message.trim() : raw;
-    let searchQuery =
-      parsed.searchQuery === null || parsed.searchQuery === undefined
-        ? null
-        : typeof parsed.searchQuery === "string"
-          ? parsed.searchQuery.trim() || null
-          : null;
-    if (searchQuery && searchQuery.toLowerCase() === "null") searchQuery = null;
-    return { message, searchQuery };
+    return { message };
   } catch {
-    return { message: raw, searchQuery: null };
+    return { message: raw };
   }
 }
 
