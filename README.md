@@ -31,6 +31,12 @@ hack-udc-2026/
         └── api/      # cliente HTTP
 ```
 
+## Requisitos
+
+- **Node.js** 20 o superior
+- **npm** 9 o superior
+- **Git**
+
 ## 🚀 Cómo ejecutar
 
 ### ⭐ Opción 1 — Todo desde la raíz (recomendado)
