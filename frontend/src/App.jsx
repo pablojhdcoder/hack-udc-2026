@@ -159,7 +159,39 @@ export default function App() {
     try {
       const resultado = await getInbox();
       const list = Array.isArray(resultado?.items) ? resultado.items : [];
-      setProcessInboxItems(list);
+      const toProcess = [];
+
+      let i = 0;
+      while (i < list.length) {
+        if (list[i].kind !== "note") {
+          toProcess.push(list[i]);
+          i++;
+          continue;
+        }
+        const noteGroup = [];
+        while (i < list.length && list[i].kind === "note") {
+          noteGroup.push(list[i]);
+          i++;
+        }
+        if (noteGroup.length === 1) {
+          toProcess.push(noteGroup[0]);
+        } else {
+          const mergedContent = noteGroup.map((n) => (n.content ?? "").trim()).filter(Boolean).join("\n");
+          const newNote = await addToInbox({ content: mergedContent });
+          for (const note of noteGroup) {
+            await discardItem("note", note.id);
+          }
+          toProcess.push({
+            kind: "note",
+            id: newNote.id,
+            content: newNote.content ?? mergedContent,
+            createdAt: newNote.createdAt,
+            inboxStatus: newNote.inboxStatus ?? "pending",
+          });
+        }
+      }
+
+      setProcessInboxItems(toProcess);
       setCurrentView("procesando");
     } catch (error) {
       console.error("Hubo un error procesando la nota:", error);
