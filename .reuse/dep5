@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: hack-udc-2026
+Upstream-Contact: https://github.com/pablojhdcoder/hack-udc-2026
+Source: https://github.com/pablojhdcoder/hack-udc-2026
+
+Files: *
+Copyright: 2026 Pablo Jesús Herrero Díaz
+License: MIT

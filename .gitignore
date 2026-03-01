@@ -17,3 +17,8 @@ backend/knowledge/**/*.md
 
 .DS_Store
 *.log
+
+# Entorno frontend (nunca subir claves)
+frontend/.env
+frontend/.env.local
+frontend/.env.*
