@@ -8,7 +8,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? "";
 const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY) : null;
-const geminiModel = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash" }) : null;
+const geminiModel = genAI ? genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" }) : null;
 
 const MAX_CONTEXT_ITEMS = 15;
 
@@ -28,9 +28,17 @@ function toContextLine(item) {
   return `[${title}]\nResumen: ${summary}`.trim();
 }
 
+function toCatalogItem(item) {
+  const ai = parseAiEnrichment(item.aiEnrichment);
+  const title = ai?.title ?? item.title ?? item.filename ?? item.url ?? "Sin título";
+  const topics = Array.isArray(ai?.topics) ? ai.topics : [];
+  return { id: item.id, kind: item.kind, title: String(title).slice(0, 120), topics };
+}
+
 /**
- * Recupera contexto de la bóveda: últimos 15 ítems procesados.
- * Opcionalmente filtra por palabras clave del mensaje (búsqueda simple en title/content/aiSummary).
+ * Recupera contexto de la bóveda: últimos ítems procesados + catálogo (id, kind, title, topics).
+ * Opcionalmente filtra por palabras clave del mensaje.
+ * @returns {{ contextText: string, catalog: Array<{ id: string, kind: string, title: string, topics: string[] }> }}
  */
 export async function getChatContext(userMessage) {
   const keywords = (userMessage || "")
@@ -76,37 +84,69 @@ export async function getChatContext(userMessage) {
   }
 
   items = items.slice(0, MAX_CONTEXT_ITEMS);
-  const lines = items.map(toContextLine);
-  return lines.join("\n\n");
+  const contextText = items.map(toContextLine).join("\n\n");
+  const catalog = items.map(toCatalogItem);
+  return { contextText, catalog };
 }
 
 /**
- * Responde con Gemini usando el contexto de la bóveda (RAG).
+ * Extrae JSON de la respuesta (quita markdown code block si viene envuelto).
  */
-export async function getRickyBrainReply(userMessage, contextFromDb) {
+function extractJsonFromResponse(raw) {
+  let text = (raw || "").trim();
+  const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlock) text = codeBlock[1].trim();
+  return text;
+}
+
+/**
+ * Responde con Gemini. El LLM solo extrae intención: mensaje conversacional y query de búsqueda (o null).
+ * La búsqueda real se ejecuta en el backend con runVaultSearch y se devuelve como localResults.
+ * Devuelve { message, searchQuery } (searchQuery es string o null).
+ */
+export async function getRickyBrainReply(userMessage) {
   if (!geminiModel) throw new Error("GEMINI_API_KEY no configurada");
 
-  const contextoDePrismaFormateado =
-    (contextFromDb && contextFromDb.trim()) || "(No hay notas o archivos procesados aún en tu bóveda.)";
+  const promptFinal = `Eres Riki Brain, el asistente de Cerebro Digital.
 
-  const promptFinal = `Eres Ricky Brain (Cerebrito), el asistente personal inteligente de la app Cerebro Digital.
-Tu objetivo es responder a la pregunta del usuario basándote ESTRICTAMENTE en este contexto de sus notas y archivos guardados:
+TU SALIDA DEBE SER UN JSON ESTRICTO (nada más que el JSON):
+{
+  "message": "Tu respuesta conversacional",
+  "searchQuery": "palabra clave o null"
+}
 
---- CONTEXTO DE LA BÓVEDA ---
-${contextoDePrismaFormateado}
------------------------------
+REGLAS:
+- "message": responde de forma natural. Si el usuario saluda o charla, responde amigable sin buscar archivos. Si pide buscar algo, escribe un mensaje corto tipo "Buscando tus notas sobre X...".
+- "searchQuery": solo pon una palabra o frase de búsqueda (ej. "medicina", "GStreamer") cuando el usuario pida explícitamente buscar archivos/notas en su baúl. En saludos, preguntas genéricas o chit-chat, devuelve null.
 
-Reglas:
-1. Si la respuesta está en el contexto, respóndela de forma conversacional, clara y concisa.
-2. Eres amigable.
-3. Si la pregunta NO se puede responder con el contexto proporcionado, dile al usuario amablemente que no tienes esa información en sus archivos actuales. No inventes datos.
+EJEMPLOS:
+Usuario: "Hola" -> {"message": "¡Hola! ¿En qué te ayudo?", "searchQuery": null}
+Usuario: "¿Qué tal?" -> {"message": "Muy bien, gracias. ¿En qué puedo ayudarte hoy?", "searchQuery": null}
+Usuario: "Pásame mis apuntes de medicina" -> {"message": "Buscando tus notas sobre medicina...", "searchQuery": "medicina"}
+Usuario: "¿Tengo algo guardado sobre GStreamer?" -> {"message": "Buscando en tu baúl sobre GStreamer...", "searchQuery": "GStreamer"}
 
 Pregunta del usuario: "${userMessage}"`;
 
   const result = await geminiModel.generateContent(promptFinal);
   const response = result.response;
   if (!response?.text) throw new Error("Respuesta vacía de Gemini");
-  return response.text();
+
+  const raw = response.text();
+  const jsonStr = extractJsonFromResponse(raw);
+  try {
+    const parsed = JSON.parse(jsonStr);
+    const message = typeof parsed.message === "string" ? parsed.message.trim() : raw;
+    let searchQuery =
+      parsed.searchQuery === null || parsed.searchQuery === undefined
+        ? null
+        : typeof parsed.searchQuery === "string"
+          ? parsed.searchQuery.trim() || null
+          : null;
+    if (searchQuery && searchQuery.toLowerCase() === "null") searchQuery = null;
+    return { message, searchQuery };
+  } catch {
+    return { message: raw, searchQuery: null };
+  }
 }
 
 export function isChatEnabled() {

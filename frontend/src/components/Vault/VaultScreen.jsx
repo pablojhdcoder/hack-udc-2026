@@ -234,7 +234,7 @@ export default function VaultScreen({ onBack, initialFolder, initialItemId }) {
   useEffect(() => {
     if (!initialFolder || !initialItemId || initialAppliedRef.current) return;
     if (selectedKind === initialFolder && itemsByKind.length > 0 && !loadingKind) {
-      const item = itemsByKind.find((i) => i.id === initialItemId);
+      const item = itemsByKind.find((i) => String(i.id) === String(initialItemId));
       if (item) setSelectedItem(item);
       initialAppliedRef.current = true;
     }

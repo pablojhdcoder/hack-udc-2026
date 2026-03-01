@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Brain, Send, X, Loader2 } from "lucide-react";
+import { Brain, Send, X, Loader2, FileText } from "lucide-react";
 import MobileFrame from "./components/Layout/MobileFrame";
 import Header from "./components/Inbox/Header";
 import Sidebar from "./components/Inbox/Sidebar";
@@ -74,6 +74,12 @@ export default function App() {
   const [inputMessage, setInputMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
+  const handleOpenReferencedNote = useCallback((kind, id) => {
+    setVaultInitial({ folder: kind, itemId: id ?? null });
+    setCurrentView("procesado");
+    setIsChatOpen(false);
+  }, []);
+
   const handleSendMessage = useCallback(async () => {
     const text = inputMessage.trim();
     if (!text || chatLoading) return;
@@ -89,7 +95,12 @@ export default function App() {
       });
       const data = await res.json().catch(() => ({}));
       const aiContent = data?.reply ?? data?.message ?? data?.content ?? "No pude generar una respuesta. Intenta de nuevo.";
-      setMessages((prev) => [...prev, { role: "ai", content: aiContent }]);
+      const localResults = Array.isArray(data?.localResults) ? data.localResults : [];
+      const searchQuery = data?.searchQuery != null ? data.searchQuery : null;
+      setMessages((prev) => [
+        ...prev,
+        { role: "ai", content: aiContent, searchQuery, localResults },
+      ]);
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -363,6 +374,26 @@ export default function App() {
                   }
                 >
                   <p className="text-sm whitespace-pre-wrap break-words">{msg.content === "__greeting__" ? t("chat.greeting") : msg.content}</p>
+                  {msg.role === "ai" && Array.isArray(msg.localResults) && msg.localResults.length > 0 && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      {msg.localResults.map((ref, j) => (
+                        <button
+                          key={j}
+                          type="button"
+                          onClick={() => handleOpenReferencedNote(ref.kind || "note", ref.id != null ? String(ref.id) : null)}
+                          className="flex items-center gap-2 w-full text-left rounded-xl border border-neutral-600 dark:border-neutral-600 bg-neutral-800/50 dark:bg-neutral-900/80 hover:bg-neutral-700 dark:hover:bg-neutral-800 px-3 py-2 transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          <span className="text-sm text-zinc-200 dark:text-zinc-100 truncate flex-1">{ref.title || "Sin título"}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {msg.role === "ai" && msg.searchQuery && (!msg.localResults || msg.localResults.length === 0) && (
+                    <p className="mt-2 text-xs text-zinc-500 dark:text-neutral-400">
+                      No se encontraron archivos en tu baúl para &quot;{msg.searchQuery}&quot;.
+                    </p>
+                  )}
                 </div>
               ))}
               {chatLoading && (
