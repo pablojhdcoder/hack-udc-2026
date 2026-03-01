@@ -15,6 +15,7 @@ import processRoutes from "./routes/process.js";
 import searchRoutes from "./routes/search.js";
 import chatRoutes from "./routes/chat.js";
 import eventosRoutes from "./routes/eventos.js";
+import topicsRoutes from "./routes/topics.js";
 
 const rootDir = path.join(__dirname, "..");
 const app = express();
@@ -31,6 +32,7 @@ app.use("/api/process", processRoutes);
 app.use("/api", searchRoutes);
 app.use("/api", chatRoutes);
 app.use("/api/eventos", eventosRoutes);
+app.use("/api/topics", topicsRoutes);
 
 app.get("/api/health", (_, res) => {
   res.json({ ok: true });

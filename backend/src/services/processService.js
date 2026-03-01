@@ -10,11 +10,56 @@ import {
   enrichFile,
   enrichAudio,
   enrichVideo,
+  updateTopicSummary,
 } from "./aiService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_ROOT = path.join(__dirname, "..", "..");
 const KINDS = ["link", "note", "file", "photo", "audio", "video"];
+
+/** Normaliza un nombre de tema para usarlo como clave única */
+function normalizeTopic(t) {
+  return String(t).trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+/**
+ * Genera/mejora los resúmenes de tema para cada topic del ítem procesado.
+ * Se llama en background (no bloquea la respuesta al cliente).
+ */
+async function upsertTopicSummaries(entity, aiEnrichment) {
+  const topics = aiEnrichment?.topics ?? aiEnrichment?.aiTopics ?? aiEnrichment?.tags ?? [];
+  if (!Array.isArray(topics) || topics.length === 0) return;
+
+  const itemInfo = {
+    kind: entity.kind,
+    title: aiEnrichment?.title ?? entity.title ?? "Sin título",
+    summary: aiEnrichment?.summary ?? null,
+    content: entity.content ?? null,
+  };
+
+  for (const rawTopic of topics) {
+    const topic = normalizeTopic(rawTopic);
+    if (!topic) continue;
+    try {
+      const existing = await prisma.topicSummary.findUnique({ where: { topic } });
+      const newSummary = await updateTopicSummary(topic, existing?.summary ?? null, itemInfo);
+
+      const prevItems = (() => { try { return JSON.parse(existing?.sourceItems ?? "[]"); } catch { return []; } })();
+      const newSourceItem = { kind: entity.kind, id: entity.id, title: itemInfo.title, createdAt: new Date().toISOString() };
+      // Deduplicar por kind+id
+      const merged = [...prevItems.filter((i) => !(i.kind === entity.kind && i.id === entity.id)), newSourceItem];
+
+      await prisma.topicSummary.upsert({
+        where: { topic },
+        update: { summary: newSummary, itemCount: merged.length, sourceItems: JSON.stringify(merged) },
+        create: { topic, summary: newSummary, itemCount: 1, sourceItems: JSON.stringify([newSourceItem]) },
+      });
+      console.log(`[Topics] Resumen actualizado para tema "${topic}"`);
+    } catch (err) {
+      console.warn(`[Topics] Error actualizando resumen de "${topic}": ${err.message}`);
+    }
+  }
+}
 
 /** Resuelve ruta absoluta del fichero (uploads/... o backend/uploads/...) */
 function resolveFilePath(relativePath) {
@@ -276,6 +321,11 @@ export async function processItem(item, destination) {
   
   const processedPath = writeMarkdown(destination, filename, content);
   console.log(`[Process] ✅ Archivo escrito en: ${processedPath}`);
+
+  // Actualizar resúmenes de tema en background (no bloquea)
+  upsertTopicSummaries({ ...entity, id }, entity.aiEnrichment).catch((err) =>
+    console.warn("[Topics] upsertTopicSummaries error:", err.message)
+  );
 
   const updatePayload = { inboxStatus: "processed", processedPath };
   switch (kind) {

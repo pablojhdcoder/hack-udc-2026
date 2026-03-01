@@ -931,3 +931,69 @@ ${CALENDAR_SCHEMA}`;
   }
   return [];
 }
+
+/**
+ * Genera o mejora un resumen acumulativo para un tema.
+ * @param {string} topic - El nombre del tema
+ * @param {string|null} existingSummary - Resumen anterior (null si es nuevo)
+ * @param {{ kind: string, title: string, summary?: string, content?: string }} newItem - Ítem recién procesado
+ * @returns {Promise<string>} Resumen actualizado en prosa
+ */
+export async function updateTopicSummary(topic, existingSummary, newItem) {
+  const itemInfo = [
+    `Tipo: ${newItem.kind}`,
+    `Título: ${newItem.title ?? "(sin título)"}`,
+    newItem.summary ? `Resumen del ítem: ${newItem.summary}` : null,
+    newItem.content ? `Contenido: ${String(newItem.content).slice(0, 600)}` : null,
+  ].filter(Boolean).join("\n");
+
+  const instruction = existingSummary
+    ? `Tienes un resumen existente sobre el tema "${topic}":\n\n${existingSummary}\n\nSe ha añadido un nuevo ítem relacionado con este tema:\n${itemInfo}\n\nReescribe y mejora el resumen incorporando la nueva información. Devuelve solo el texto del resumen en prosa, sin títulos ni listas, en 2-4 párrafos.`
+    : `Crea un resumen inicial sobre el tema "${topic}" basándote en este ítem:\n${itemInfo}\n\nDevuelve solo el texto del resumen en prosa, sin títulos ni listas, en 1-3 párrafos.`;
+
+  const azureFn = async () => {
+    const client = getAzureClient();
+    if (!client) throw new Error("Azure no disponible");
+    const completion = await client.chat.completions.create({
+      model: getAzureDeployment(),
+      messages: [
+        { role: "system", content: "Eres un asistente experto en sintetizar y resumir conocimiento. Escribes en español de forma clara y concisa." },
+        { role: "user", content: instruction },
+      ],
+      temperature: 0.4,
+      max_tokens: 800,
+    });
+    return completion.choices?.[0]?.message?.content?.trim() ?? "";
+  };
+
+  const geminiFn = async () => {
+    const model = getGeminiModel();
+    if (!model) throw new Error("Gemini no disponible");
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: instruction }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
+    });
+    return result.response?.text?.()?.trim() ?? "";
+  };
+
+  try {
+    if (getAzureClient()) {
+      try {
+        const text = await withTimeout(azureFn(), AZURE_TIMEOUT_MS);
+        if (text) return text;
+      } catch (err) {
+        console.warn(`[AI] updateTopicSummary Azure falló (${err.message}), usando Gemini...`);
+      }
+    }
+    if (getGeminiModel()) {
+      const text = await geminiFn();
+      if (text) return text;
+    }
+  } catch (err) {
+    console.warn("[AI] updateTopicSummary falló:", err.message);
+  }
+
+  // Fallback: texto plano básico
+  const base = existingSummary ? `${existingSummary}\n\n` : "";
+  return `${base}[${newItem.kind}] ${newItem.title ?? "Sin título"}${newItem.summary ? `: ${newItem.summary}` : ""}`.trim();
+}

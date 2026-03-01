@@ -126,3 +126,14 @@ model ViewState {
 
   @@unique([kind, sourceId])
 }
+
+// Resúmenes acumulativos generados por IA para cada tema detectado.
+model TopicSummary {
+  id          String   @id @default(cuid())
+  topic       String   @unique
+  summary     String
+  itemCount   Int      @default(0)
+  sourceItems String   @default("[]") // JSON: [{kind, id, title, createdAt}]
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}

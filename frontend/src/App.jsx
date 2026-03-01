@@ -250,8 +250,8 @@ export default function App() {
       <MobileFrame>
         <TemasView
           onBack={() => setCurrentView("inbox")}
-          onSelectItem={(item) => {
-            setVaultInitial({ folder: item.kind, itemId: item.id ?? null });
+          onOpenItem={(kind, id) => {
+            setVaultInitial({ folder: kind, itemId: id ?? null });
             setCurrentView("procesado");
           }}
         />
